@@ -1,0 +1,1440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mekko Chart Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* Custom styles for smooth transitions and specific elements */
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Prevent body scroll when sidebar is open */
+        }
+
+        #app {
+            display: flex;
+            height: 100vh;
+            overflow: hidden; /* Ensure content doesn't overflow */
+        }
+
+        #sidebar {
+            --sidebar-base-font-size: 14px; /* Default base font size for sidebar content */
+            font-size: var(--sidebar-base-font-size); /* Apply base font size */
+            width: var(--sidebar-width, 320px); /* Default sidebar width, uses CSS variable */
+            min-width: 250px; /* Minimum width for sidebar */
+            max-width: 50%; /* Max width for sidebar */
+            background-color: #f8fafc; /* Tailwind slate-50 */
+            box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease-in-out, width 0.3s ease-in-out; /* Add width transition */
+            transform: translateX(0); /* Default visible */
+            overflow-y: auto; /* Allow scrolling for content within sidebar */
+            padding: 1rem;
+            flex-shrink: 0; /* Prevent shrinking */
+            z-index: 10; /* Ensure sidebar is above chart */
+            position: relative; /* For resizer handle positioning */
+        }
+
+        #sidebar.hidden {
+            transform: translateX(-100%); /* Slide out */
+            width: 0;
+            padding: 0;
+            min-width: 0;
+        }
+
+        #sidebar-resizer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 8px; /* Resizer handle width */
+            height: 100%;
+            cursor: ew-resize;
+            z-index: 11; /* Above sidebar content */
+            background-color: transparent; /* Make it invisible */
+        }
+        #sidebar-resizer:hover {
+            background-color: rgba(0, 0, 0, 0.1); /* Visible on hover */
+        }
+
+
+        #chart-container {
+            flex-grow: 1; /* Take remaining space */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #ffffff;
+            position: relative; /* For toggle button positioning */
+            overflow: hidden; /* Hide overflow from chart */
+            transition: width 0.3s ease-in-out, margin-left 0.3s ease-in-out;
+        }
+
+        #toggle-sidebar-btn {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            z-index: 20;
+            background-color: rgba(203, 213, 225, 0.5); /* slate-300 with 50% opacity */
+            color: #475569; /* slate-600 */
+            border-radius: 9999px;
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            box-shadow: none;
+            border: 1px solid rgba(226, 232, 240, 0.7); /* slate-200 with 70% opacity */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease-in-out;
+        }
+        #toggle-sidebar-btn:hover {
+            background-color: rgba(148, 163, 184, 0.7); /* slate-400 with 70% opacity */
+            color: #1e293b;
+        }
+
+
+        /* Styling for the data input grid */
+        .data-grid-container {
+            overflow-x: auto; /* Allow horizontal scrolling for wide tables */
+            margin-top: 0.75rem; /* Adjusted from 1rem */
+        }
+
+        .data-grid {
+            width: 100%;
+            border-collapse: collapse; /* No padding between cells */
+            font-size: inherit; /* Inherit from sidebar base font size */
+        }
+
+        .data-grid th, .data-grid td {
+            border: 1px solid #e2e8f0; /* Tailwind gray-200 */
+            padding: 0; /* No padding between cells */
+            text-align: center;
+        }
+
+        .data-grid th {
+            background-color: #f1f5f9; /* Tailwind slate-100 */
+            font-weight: 600; /* semi-bold */
+            padding: 0.2rem 0.1rem; /* Added padding for header content */
+        }
+
+        .data-grid input[type="text"],
+        .data-grid input[type="number"] {
+            width: 100%;
+            padding: 0.2rem; /* Adjusted from 0.25rem */
+            border: none; /* Remove individual cell borders if table has them */
+            border-radius: 0; /* No rounded corners for inner inputs */
+            text-align: center;
+            background-color: #ffffff;
+            font-family: 'Inter', sans-serif; /* Harmonized font */
+            font-size: inherit; /* Inherit from sidebar base font size */
+        }
+
+        .data-grid input[type="number"]::-webkit-inner-spin-button,
+        .data-grid input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .data-grid input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
+        /* D3 chart specific styles */
+        .chart-svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .axis path,
+        .axis line {
+            fill: none;
+            stroke: #cbd5e1; /* Tailwind slate-300 */
+            shape-rendering: crispEdges;
+        }
+
+        .grid line {
+            stroke: #e2e8f0; /* Tailwind gray-200 */
+            stroke-opacity: 0.7;
+            shape-rendering: crispEdges;
+        }
+
+        .segment-label {
+            text-anchor: middle;
+            pointer-events: none; /* Allow clicks to pass through to segments if needed */
+        }
+
+        .column-label {
+            text-anchor: middle;
+        }
+
+        .chart-title {
+            font-weight: 700; /* bold */
+            text-anchor: middle;
+        }
+
+        .axis-title {
+            font-weight: 600; /* semi-bold */
+            text-anchor: middle;
+        }
+
+        .legend-item {
+            cursor: pointer;
+        }
+
+        /* General sidebar element styling for harmonization and compactness */
+        .sidebar-section {
+            padding: 0.75rem; /* Adjusted from 1rem */
+            margin-bottom: 1rem; /* Adjusted from 1.5rem */
+        }
+
+        .sidebar-label {
+            font-size: inherit; /* Inherit from sidebar base font size */
+            font-family: 'Inter', sans-serif; /* Harmonized font */
+            margin-bottom: 0.25rem; /* Adjusted from 0.5rem */
+        }
+
+        .sidebar-input, .sidebar-select {
+            padding: 0.375rem; /* Adjusted from 0.5rem (p-2) */
+            font-size: inherit; /* Inherit from sidebar base font size */
+            font-family: 'Inter', sans-serif; /* Harmonized font */
+        }
+
+        .sidebar-button {
+            padding: 0.1rem 0.3rem; /* Adjusted for smaller buttons */
+            font-size: inherit; /* Inherit from sidebar base font size */
+            font-family: 'Inter', sans-serif; /* Harmonized font */
+            border-radius: 0.25rem; /* Slightly rounded corners */
+            line-height: 1; /* Ensure text is centered vertically */
+        }
+
+        .sidebar-flex-gap-sm {
+            gap: 0.5rem; /* Adjusted from gap-2 */
+        }
+        .sidebar-flex-gap-xs {
+            gap: 0.25rem; /* Adjusted from gap-x-4 gap-y-2 */
+        }
+
+        /* Specific adjustments for color inputs */
+        .color-input-container input[type="color"] {
+            width: 2rem; /* Adjusted from w-10 */
+            height: 1.5rem; /* Adjusted from h-8 */
+        }
+
+        /* Styles for the new +/- buttons in table headers */
+        .table-action-button {
+            background-color: #e2e8f0; /* Tailwind gray-200 */
+            color: #475569; /* Tailwind slate-600 */
+            border: none;
+            border-radius: 9999px; /* Full rounded */
+            width: 1.25rem; /* w-5 */
+            height: 1.25rem; /* h-5 */
+            font-size: 0.75rem; /* text-xs */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            flex-shrink: 0; /* Prevent shrinking */
+        }
+        .table-action-button:hover {
+            background-color: #cbd5e1; /* Tailwind slate-300 */
+        }
+        .table-header-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem; /* gap-1 */
+            width: 100%; /* Ensure content takes full width */
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            #sidebar {
+                position: absolute;
+                height: 100%;
+                left: 0;
+                top: 0;
+                --sidebar-width: 100vw;
+            }
+            
+            #sidebar.hidden {
+                transform: translateX(-100%);
+            }
+            
+            #sidebar:not(.hidden) {
+                 transform: translateX(0); /* Visible state */
+            }
+
+            #toggle-sidebar-btn {
+                left: 1rem;
+                right: auto;
+                top: 1rem;
+                transform: translateX(0);
+            }
+
+            #chart-container {
+                width: 100%;
+            }
+
+            #sidebar-resizer {
+                display: none; /* Hide resizer on mobile */
+            }
+        }
+
+        .copyright-statement {
+            text-align: center;
+            padding: 10px;
+            font-size: 0.75rem; /* text-xs */
+            color: #64748b; /* Tailwind slate-500 */
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            text-align: center;
+            max-width: 300px;
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+            color: #1e293b;
+        }
+
+        .modal-content h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .modal-button {
+            padding: 0.5rem 1.25rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+
+        .modal-button.confirm {
+            background-color: #ef4444; /* Tailwind red-500 */
+            color: white;
+            border: 1px solid #ef4444;
+        }
+        .modal-button.confirm:hover {
+            background-color: #dc2626; /* Tailwind red-600 */
+        }
+
+        .modal-button.cancel {
+            background-color: #f1f5f9; /* Tailwind slate-100 */
+            color: #334155; /* Tailwind slate-700 */
+            border: 1px solid #cbd5e1; /* Tailwind slate-300 */
+        }
+        .modal-button.cancel:hover {
+            background-color: #e2e8f0; /* Tailwind slate-200 */
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="flex">
+        <aside id="sidebar" class="relative z-20">
+            <div id="sidebar-resizer"></div>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-900">Mekko Chart Settings</h2>
+                <div class="flex items-center space-x-2">
+                    <button id="decrease-font-btn" class="sidebar-button bg-gray-300 text-gray-800 rounded-full w-6 h-6 flex items-center justify-center text-base hover:bg-gray-400">-</button>
+                    <button id="increase-font-btn" class="sidebar-button bg-gray-300 text-gray-800 rounded-full w-6 h-6 flex items-center justify-center text-base hover:bg-gray-400">+</button>
+                    <button id="close-sidebar-btn" class="md:hidden p-2 rounded-full hover:bg-gray-200 text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="sidebar-section bg-white rounded-lg shadow-sm">
+                <div class="flex items-center space-x-2 mb-2">
+                    <button id="save-data-btn" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Save Data</button>
+                    <input type="file" id="load-data-input" class="hidden" accept=".json">
+                    <label for="load-data-input" class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 cursor-pointer text-center">Load Data</label>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="export-png-btn" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">Export as PNG</button>
+                    <button id="export-svg-btn" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-purple-500 rounded-md hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">Export as SVG</button>
+                </div>
+            </div>
+
+            <div class="sidebar-section bg-white rounded-lg shadow-sm">
+                <div class="mb-2 flex flex-col sidebar-flex-gap-sm">
+                    <label for="row-title-input" class="sidebar-label text-gray-700">Row Title (e.g., Treatment Type):</label>
+                    <input type="text" id="row-title-input" class="sidebar-input block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50" value="Treatment Type">
+                </div>
+                <div class="mb-2 flex flex-col sidebar-flex-gap-sm">
+                    <label for="column-title-input" class="sidebar-label text-gray-700">Column Title (e.g., Severity):</label>
+                    <input type="text" id="column-title-input" class="sidebar-input block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50" value="Severity">
+                </div>
+                <div class="mb-2 flex flex-col sidebar-flex-gap-sm">
+                    <label for="data-title-input" class="sidebar-label text-gray-700">Data Title (e.g., Patients):</label>
+                    <input type="text" id="data-title-input" class="sidebar-input block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50" value="Patients">
+                </div>
+
+                <div class="data-grid-container">
+                    <table id="data-grid" class="data-grid">
+                        <thead>
+                            <tr id="column-headers">
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="data-rows">
+                            </tbody>
+                    </table>
+                </div>
+                <div class="flex flex-wrap sidebar-flex-gap-sm mt-3">
+                    <button id="transpose-btn" class="sidebar-button bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors">Transpose Table</button>
+                    </div>
+            </div>
+
+            <div class="sidebar-section bg-white rounded-lg shadow-sm">
+                <div class="mb-2 flex flex-col sidebar-flex-gap-sm">
+                    <label for="chart-title" class="sidebar-label text-gray-700">Chart Title:</label>
+                    <input type="text" id="chart-title" class="sidebar-input block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                </div>
+
+                <div class="mb-2">
+                    <label class="sidebar-label text-gray-700 mb-1">Y-Axis Scale:</label>
+                    <div class="flex items-center sidebar-flex-gap-sm">
+                        <label class="inline-flex items-center">
+                            <input type="radio" name="y-axis-scale" value="absolute" class="form-radio text-blue-600">
+                            <span class="ml-2 text-sm text-gray-600">Absolute Values</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="radio" name="y-axis-scale" value="percentage" class="form-radio text-blue-600" checked>
+                            <span class="ml-2 text-sm text-gray-600">Percentage (100% Stack)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="sidebar-label text-gray-700 mb-1">Theme Presets:</label>
+                    <select id="theme-preset" class="sidebar-select mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                        <option value="default">Default</option>
+                        <option value="light">Light</option>
+                        <option value="grey">Grey</option>
+                        <option value="black">Black</option>
+                    </select>
+                </div>
+
+                <div class="mb-2">
+                    <label class="sidebar-label text-gray-700 mb-1">Chart Colors:</label>
+                    <div class="flex flex-wrap items-center sidebar-flex-gap-xs">
+                        <div class="flex items-center sidebar-flex-gap-xs">
+                            <label for="background-color" class="text-sm text-gray-600 mr-1">Background:</label>
+                            <input type="color" id="background-color" class="color-input-container w-8 h-6 rounded-md border border-gray-300 cursor-pointer">
+                        </div>
+                        <div class="flex items-center sidebar-flex-gap-xs">
+                            <label for="border-color" class="text-sm text-gray-600 mr-1">Border:</label>
+                            <input type="color" id="border-color" class="color-input-container w-8 h-6 rounded-md border border-gray-300 cursor-pointer">
+                        </div>
+                        <div class="w-full">
+                            <label class="sidebar-label text-gray-700 mb-1">Segment Color Palette:</label>
+                            <select id="segment-color-palette" class="sidebar-select mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                <option value="default">Default</option>
+                                <option value="vibrant">Vibrant</option>
+                                <option value="pastel">Pastel</option>
+                                <option value="earthy">Earthy</option>
+                                <option value="cool">Cool</option>
+                                <option value="warm">Warm</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </div>
+                        <div class="w-full">
+                            <label for="segment-colors" class="sidebar-label text-gray-600 mb-1">Custom Segment Colors (comma-separated hex):</label>
+                            <input type="text" id="segment-colors" class="sidebar-input mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50" placeholder="#4285F4,#EA4335,#FBBC05,#34A853">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="sidebar-label text-gray-700 mb-1">Font Settings:</label>
+                    <div class="flex flex-wrap items-center sidebar-flex-gap-xs">
+                        <div class="flex items-center flex-1 min-w-[120px]"> <label for="font-family" class="text-sm text-gray-600 mr-1">Family:</label>
+                            <select id="font-family" class="sidebar-select flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                <option value="Lato, sans-serif">Lato</option>
+                                <option value="Inter, sans-serif">Inter</option>
+                                <option value="Arial, sans-serif">Arial</option>
+                                <option value="Verdana, sans-serif">Verdana</option>
+                                <option value="Georgia, serif">Georgia</option>
+                                <option value="Times New Roman, serif">Times New Roman</option>
+                                <option value="Courier New, monospace">Courier New</option>
+                                <option value="Roboto, sans-serif">Roboto</option>
+                                <option value="Open Sans, sans-serif">Open Sans</option>
+                                <option value="Montserrat, sans-serif">Montserrat</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center">
+                            <label for="font-size" class="text-sm text-gray-600 mr-1">Size (px):</label>
+                            <input type="number" id="font-size" class="sidebar-input w-16 rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50" value="12" min="8" max="30">
+                        </div>
+                        <div class="flex items-center">
+                            <label for="font-color" class="text-sm text-gray-600 mr-1">Color:</label>
+                            <input type="color" id="font-color" class="color-input-container w-8 h-6 rounded-md border border-gray-300 cursor-pointer" value="#475569">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="sidebar-label text-gray-700 mb-1">Data Labels:</label>
+                    <div class="flex items-center mb-1">
+                        <input type="checkbox" id="show-data-labels" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500 mr-2" checked>
+                        <label for="show-data-labels" class="text-sm text-gray-600">Show Data Labels</label>
+                    </div>
+                    <div class="mb-1">
+                        <label for="label-precision" class="sidebar-label text-gray-600 mb-1">Precision (decimal places):</label>
+                        <input type="number" id="label-precision" class="sidebar-input w-20 rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50" value="0" min="0" max="5">
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="sidebar-label text-gray-700 mb-1">Gridlines:</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="show-gridlines" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500 mr-2">
+                        <label for="show-gridlines" class="text-sm text-gray-600">Show Gridlines</label>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="sidebar-label text-gray-700 mb-1">X-Axis Labels:</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="show-column-totals" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500 mr-2">
+                        <label for="show-column-totals" class="text-sm text-gray-600">Show Column Totals</label>
+                    </div>
+                    <!-- NEW: Checkbox for abbreviating totals -->
+                    <div class="flex items-center mt-1">
+                        <input type="checkbox" id="abbreviate-totals-checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500 mr-2">
+                        <label for="abbreviate-totals-checkbox" class="text-sm text-gray-600">Abbreviate Totals (k, m, b)</label>
+                    </div>
+                </div>
+
+                <div class="sidebar-section bg-white rounded-lg shadow-sm">
+                    <label class="sidebar-label text-gray-700 mb-1">Axis Display:</label>
+                    <div class="flex flex-col sidebar-flex-gap-xs">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="show-x-axis-labels-checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500 mr-2" checked>
+                            <label for="show-x-axis-labels-checkbox" class="text-sm text-gray-600">Show X-Axis Labels (Categories)</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" id="show-y-axis-labels-checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500 mr-2" checked>
+                            <label for="show-y-axis-labels-checkbox" class="text-sm text-gray-600">Show Y-Axis Labels (Values)</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" id="show-x-axis-title-checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500 mr-2" checked>
+                            <label for="show-x-axis-title-checkbox" class="text-sm text-gray-600">Show X-Axis Title</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" id="show-y-axis-title-checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500 mr-2" checked>
+                            <label for="show-y-axis-title-checkbox" class="text-sm text-gray-600">Show Y-Axis Title</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="sidebar-label text-gray-700 mb-1">Legend Placement:</label>
+                    <select id="legend-placement" class="sidebar-select mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                        <option value="right">Right of Chart</option>
+                        <option value="below">Below Chart</option>
+                        <option value="above">Above Chart</option>
+                    </select>
+                </div>
+            </div>
+        </aside>
+
+        <main id="chart-container" class="flex-grow relative">
+            <button id="toggle-sidebar-btn">
+                <span id="toggle-icon">
+                    </span>
+            </button>
+            <svg id="mekko-chart" class="chart-svg"></svg>
+        </main>
+    </div>
+
+    <div class="copyright-statement">
+        © 2025 Andrius Varanavicius
+    </div>
+
+    <div id="confirmation-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 id="modal-message"></h3>
+            <div class="modal-buttons">
+                <button id="modal-yes-btn" class="modal-button confirm">Yes</button>
+                <button id="modal-no-btn" class="modal-button cancel">No</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables for D3 chart dimensions and margins
+        // Adjusted margins to provide more flexible space around the chart content.
+        const margin = { top: 60, right: 30, bottom: 80, left: 60 };
+        let width, height; // Will be calculated dynamically based on container size and margins
+
+        // Default data and configuration for the Mekko Chart
+        const defaultData = {
+            columnLabels: ['Mild', 'Moderate', 'Severe'],
+            rowLabels: ['Topicals', 'Vitamin D', 'Phototherapy', 'Oral', 'Biological'],
+            values: [
+                [500000, 200000, 100000],
+                [1000000, 300000, 200000],
+                [200000, 100000, 50000],
+                [0, 50000, 10000],
+                [0, 10000, 100000]
+            ]
+        };
+
+        const defaultChartConfig = {
+            chartTitle: 'Treatment Efficacy',
+            yAxisScaleType: 'percentage', 
+            backgroundColor: '#FFFFFF',
+            borderColor: '#E2E8F0',
+            segmentColors: ['#4285F4', '#EA4335', '#FBBC05', '#34A853', '#7B1FA2', '#00796B', '#D32F2F', '#C2185B'],
+            fontFamily: 'Lato, sans-serif', 
+            fontSize: 12,
+            fontColor: '#475569',
+            showDataLabels: true,
+            labelPrecision: 0,
+            showGridlines: false, 
+            showColumnTotals: false,
+            abbreviateTotals: false, // NEW: Config for abbreviating totals
+            legendPlacement: 'right',
+            showXAxisLabels: true, // Config for X-Axis Labels visibility
+            showYAxisLabels: true, // Config for Y-Axis Labels visibility
+            showXAxisTitle: true, // Config for X-Axis Title visibility
+            showYAxisTitle: true // Config for Y-Axis Title visibility
+        };
+
+        // Theme presets for quick styling changes
+        const themes = {
+            default: {
+                backgroundColor: '#FFFFFF',
+                borderColor: '#E2E8F0',
+                fontColor: '#475569',
+                segmentColors: ['#4285F4', '#EA4335', '#FBBC05', '#34A853', '#7B1FA2', '#00796B', '#D32F2F', '#C2185B']
+            },
+            light: {
+                backgroundColor: '#f8fafc',
+                borderColor: '#e2e8f0',
+                fontColor: '#1e293b',
+                segmentColors: ['#6366f1', '#a855f7', '#ec4899', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6']
+            },
+            grey: {
+                backgroundColor: '#e5e7eb',
+                borderColor: '#9ca3af',
+                fontColor: '#374151',
+                segmentColors: ['#6b7280', '#9ca3af', '#d1d5db', '#e5e7eb', '#4b5563', '#1f2937']
+            },
+            black: {
+                backgroundColor: '#1f2937',
+                borderColor: '#4b5563',
+                fontColor: '#f9fafb',
+                segmentColors: ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#6b7280', '#9ca3af']
+            }
+        };
+
+        // Sophisticated color palettes for segment coloring
+        const palettes = {
+            default: ['#4285F4', '#EA4335', '#FBBC05', '#34A853', '#7B1FA2', '#00796B', '#D32F2F', '#C2185B'],
+            vibrant: ['#FF6F61', '#6B5B95', '#88B04B', '#F7CAC9', '#92A8CD', '#F4D03F', '#5B5EA6', '#9B2335'],
+            pastel: ['#A8DADC', '#457B9D', '#1D3557', '#F4A261', '#E76F51', '#2A9D8F', '#F8EDEB', '#FCD5CE'],
+            earthy: ['#6D597A', '#B5838D', '#E5989B', '#FFB4A2', '#FFCDB2', '#A2D2FF', '#83C5BE', '#006D77'],
+            cool: ['#264653', '#2A9D8F', '#E9C46A', '#F4A261', '#E76F51', '#5DADE2', '#A9CCE3', '#D6EAF8'],
+            warm: ['#D87B6A', '#F2AE72', '#F8D49D', '#F9E795', '#FAD7A0', '#EB984E', '#E67E22', '#BA4A00']
+        };
+
+        let chartData = JSON.parse(JSON.stringify(defaultData)); // Current chart data
+        let chartConfig = JSON.parse(JSON.stringify(defaultChartConfig)); // Current chart configuration
+        let sidebarWidth = 320; // Default sidebar width
+        let sidebarBaseFontSize = 14; // Default font size for sidebar content
+
+        // DOM Elements
+        const sidebar = document.getElementById('sidebar');
+        const sidebarResizer = document.getElementById('sidebar-resizer');
+        const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
+        const closeSidebarBtn = document.getElementById('close-sidebar-btn');
+        const toggleIcon = document.getElementById('toggle-icon');
+        const dataGridTable = document.getElementById('data-grid');
+        const columnHeadersRow = document.getElementById('column-headers');
+        const dataRowsBody = document.getElementById('data-rows');
+        const transposeBtn = document.getElementById('transpose-btn');
+        const chartSvg = d3.select('#mekko-chart');
+        const chartContainer = document.getElementById('chart-container');
+        const rowTitleInput = document.getElementById('row-title-input');
+        const columnTitleInput = document.getElementById('column-title-input');
+        const dataTitleInput = document.getElementById('data-title-input');
+        const decreaseFontBtn = document.getElementById('decrease-font-btn');
+        const increaseFontBtn = document.getElementById('increase-font-btn');
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const modalMessage = document.getElementById('modal-message');
+        const modalYesBtn = document.getElementById('modal-yes-btn');
+        const modalNoBtn = document.getElementById('modal-no-btn');
+        let modalOnConfirmCallback = null; // Callback for modal confirmation
+        const chartTitleInput = document.getElementById('chart-title');
+        const yAxisScaleRadios = document.querySelectorAll('input[name="y-axis-scale"]');
+        const themePresetSelect = document.getElementById('theme-preset');
+        const backgroundColorInput = document.getElementById('background-color');
+        const borderColorInput = document.getElementById('border-color');
+        const segmentColorPaletteSelect = document.getElementById('segment-color-palette');
+        const segmentColorsInput = document.getElementById('segment-colors');
+        const fontFamilySelect = document.getElementById('font-family');
+        const fontSizeInput = document.getElementById('font-size');
+        const fontColorInput = document.getElementById('font-color');
+        const showDataLabelsInput = document.getElementById('show-data-labels');
+        const labelPrecisionInput = document.getElementById('label-precision');
+        const showGridlinesInput = document.getElementById('show-gridlines');
+        const showColumnTotalsInput = document.getElementById('show-column-totals');
+        const abbreviateTotalsCheckbox = document.getElementById('abbreviate-totals-checkbox'); // NEW
+        const legendPlacementSelect = document.getElementById('legend-placement');
+        const saveDataBtn = document.getElementById('save-data-btn');
+        const loadDataInput = document.getElementById('load-data-input');
+        const exportPngBtn = document.getElementById('export-png-btn');
+        const exportSvgBtn = document.getElementById('export-svg-btn');
+        const showXAxisLabelsCheckbox = document.getElementById('show-x-axis-labels-checkbox');
+        const showYAxisLabelsCheckbox = document.getElementById('show-y-axis-labels-checkbox');
+        const showXAxisTitleCheckbox = document.getElementById('show-x-axis-title-checkbox');
+        const showYAxisTitleCheckbox = document.getElementById('show-y-axis-title-checkbox');
+
+        /**
+         * Displays a confirmation modal with a given message and callback.
+         * @param {string} message - The message to display in the modal.
+         * @param {function} onConfirm - The function to call if the user confirms.
+         */
+        function showConfirmationModal(message, onConfirm) {
+            modalMessage.textContent = message;
+            modalOnConfirmCallback = onConfirm;
+            confirmationModal.classList.remove('hidden');
+        }
+
+        /**
+         * Hides the confirmation modal.
+         */
+        function hideConfirmationModal() {
+            confirmationModal.classList.add('hidden');
+            modalOnConfirmCallback = null;
+        }
+
+        // Event listeners for the confirmation modal buttons
+        modalYesBtn.addEventListener('click', () => {
+            if (modalOnConfirmCallback) modalOnConfirmCallback();
+            hideConfirmationModal();
+        });
+
+        modalNoBtn.addEventListener('click', () => {
+            hideConfirmationModal();
+        });
+
+        /**
+         * Initializes or re-initializes the data input grid based on chartData.
+         * This function builds the table headers and rows dynamically.
+         */
+        function initializeDataGrid() {
+            columnHeadersRow.innerHTML = '<th></th>'; // Clear existing column headers
+            dataRowsBody.innerHTML = ''; // Clear existing data rows
+
+            // Add column headers with add/remove buttons
+            chartData.columnLabels.forEach((label, colIndex) => {
+                const th = document.createElement('th');
+                th.innerHTML = `<div class="table-header-content"><button class="table-action-button add-col-btn" data-col-index="${colIndex}">+</button><input type="text" value="${label}" placeholder="Column ${colIndex + 1}" data-col-index="${colIndex}" class="column-label-input"><button class="table-action-button remove-col-btn" data-col-index="${colIndex}">-</button></div>`;
+                columnHeadersRow.appendChild(th);
+            });
+
+            // Add data rows and row labels with add/remove buttons
+            chartData.values.forEach((rowValues, rowIndex) => {
+                const tr = document.createElement('tr');
+                const th = document.createElement('th');
+                th.innerHTML = `<div class="table-header-content"><button class="table-action-button add-row-btn" data-row-index="${rowIndex}">+</button><input type="text" value="${chartData.rowLabels[rowIndex]}" placeholder="Row ${rowIndex + 1}" data-row-index="${rowIndex}" class="row-label-input"><button class="table-action-button remove-row-btn" data-row-index="${rowIndex}">-</button></div>`;
+                tr.appendChild(th);
+                rowValues.forEach((value, colIndex) => {
+                    const td = document.createElement('td');
+                    td.innerHTML = `<input type="number" value="${value}" data-row-index="${rowIndex}" data-col-index="${colIndex}" class="data-value-input">`;
+                    tr.appendChild(td);
+                });
+                dataRowsBody.appendChild(tr);
+            });
+            addGridEventListeners(); // Attach event listeners to newly created elements
+        }
+
+        /**
+         * Attaches event listeners to the data grid inputs and buttons.
+         * This handles updating chartData when values or labels are changed.
+         */
+        function addGridEventListeners() {
+            document.querySelectorAll('.column-label-input').forEach(input => {
+                input.oninput = (e) => { chartData.columnLabels[parseInt(e.target.dataset.colIndex)] = e.target.value; drawMekkoChart(); };
+            });
+            document.querySelectorAll('.row-label-input').forEach(input => {
+                input.oninput = (e) => { chartData.rowLabels[parseInt(e.target.dataset.rowIndex)] = e.target.value; drawMekkoChart(); };
+            });
+            document.querySelectorAll('.data-value-input').forEach(input => {
+                input.oninput = (e) => { chartData.values[parseInt(e.target.dataset.rowIndex)][parseInt(e.target.dataset.colIndex)] = parseFloat(e.target.value) || 0; drawMekkoChart(); };
+            });
+            document.querySelectorAll('.add-col-btn').forEach(button => {
+                button.onclick = (e) => addColumn(parseInt(e.target.dataset.colIndex));
+            });
+            document.querySelectorAll('.remove-col-btn').forEach(button => {
+                button.onclick = (e) => showConfirmationModal(`Remove column "${chartData.columnLabels[parseInt(e.target.dataset.colIndex)]}"?`, () => removeColumnConfirmed(parseInt(e.target.dataset.colIndex)));
+            });
+            document.querySelectorAll('.add-row-btn').forEach(button => {
+                button.onclick = (e) => addRow(parseInt(e.target.dataset.rowIndex));
+            });
+            document.querySelectorAll('.remove-row-btn').forEach(button => {
+                button.onclick = (e) => showConfirmationModal(`Remove row "${chartData.rowLabels[parseInt(e.target.dataset.rowIndex)]}"?`, () => removeRowConfirmed(parseInt(e.target.dataset.rowIndex)));
+            });
+        }
+
+        /**
+         * Adds a new row to the chart data at a specified index.
+         * @param {number} atIndex - The index at which to add the new row.
+         */
+        function addRow(atIndex) {
+            const newRowValues = Array(chartData.columnLabels.length).fill(0);
+            if (atIndex === undefined || atIndex >= chartData.rowLabels.length) {
+                chartData.rowLabels.push(`Segment ${chartData.rowLabels.length + 1}`);
+                chartData.values.push(newRowValues);
+            } else {
+                chartData.rowLabels.splice(atIndex, 0, `Segment ${chartData.rowLabels.length + 1}`);
+                chartData.values.splice(atIndex, 0, newRowValues);
+            }
+            initializeDataGrid();
+            drawMekkoChart();
+        }
+
+        /**
+         * Confirms and removes a row from the chart data at a specified index.
+         * Ensures at least one row remains.
+         * @param {number} atIndex - The index of the row to remove.
+         */
+        function removeRowConfirmed(atIndex) {
+            if (chartData.rowLabels.length > 1) {
+                chartData.rowLabels.splice(atIndex, 1);
+                chartData.values.splice(atIndex, 1);
+                initializeDataGrid();
+                drawMekkoChart();
+            }
+        }
+
+        /**
+         * Adds a new column to the chart data at a specified index.
+         * @param {number} atIndex - The index at which to add the new column.
+         */
+        function addColumn(atIndex) {
+            if (atIndex === undefined || atIndex >= chartData.columnLabels.length) {
+                chartData.columnLabels.push(`Category ${chartData.columnLabels.length + 1}`);
+                chartData.values.forEach(row => row.push(0));
+            } else {
+                chartData.columnLabels.splice(atIndex, 0, `Category ${chartData.columnLabels.length + 1}`);
+                chartData.values.forEach(row => row.splice(atIndex, 0, 0));
+            }
+            initializeDataGrid();
+            drawMekkoChart();
+        }
+
+        /**
+         * Confirms and removes a column from the chart data at a specified index.
+         * Ensures at least one column remains.
+         * @param {number} atIndex - The index of the column to remove.
+         */
+        function removeColumnConfirmed(atIndex) {
+            if (chartData.columnLabels.length > 1) {
+                chartData.columnLabels.splice(atIndex, 1);
+                chartData.values.forEach(row => row.splice(atIndex, 1));
+                initializeDataGrid();
+                drawMekkoChart();
+            }
+        }
+
+        /**
+         * Transposes the chart data (swaps rows and columns).
+         * Also updates the corresponding row and column titles.
+         */
+        function transposeData() {
+            const transposedValues = chartData.values[0].map((_, colIndex) => chartData.values.map(row => row[colIndex]));
+            [chartData.values, chartData.rowLabels, chartData.columnLabels] = [transposedValues, chartData.columnLabels, chartData.rowLabels];
+            [rowTitleInput.value, columnTitleInput.value] = [columnTitleInput.value, rowTitleInput.value];
+            chartConfig.xAxisTitle = columnTitleInput.value;
+            chartConfig.yAxisTitle = dataTitleInput.value;
+            initializeDataGrid();
+            initializeConfigInputs(); // Re-sync config inputs with new titles
+            drawMekkoChart();
+        }
+
+        /**
+         * Initializes the configuration input fields with current chartConfig values.
+         */
+        function initializeConfigInputs() {
+            chartTitleInput.value = chartConfig.chartTitle;
+            backgroundColorInput.value = chartConfig.backgroundColor;
+            borderColorInput.value = chartConfig.borderColor;
+            fontFamilySelect.value = chartConfig.fontFamily;
+            // Fallback for font family if the current one isn't in the select options
+            if (![...fontFamilySelect.options].some(o => o.value === chartConfig.fontFamily)) {
+                fontFamilySelect.value = 'Lato, sans-serif';
+            }
+            fontSizeInput.value = chartConfig.fontSize;
+            fontColorInput.value = chartConfig.fontColor;
+            showDataLabelsInput.checked = chartConfig.showDataLabels;
+            labelPrecisionInput.value = chartConfig.labelPrecision;
+            showGridlinesInput.checked = chartConfig.showGridlines;
+            showColumnTotalsInput.checked = chartConfig.showColumnTotals;
+            abbreviateTotalsCheckbox.checked = chartConfig.abbreviateTotals; // NEW
+            legendPlacementSelect.value = chartConfig.legendPlacement;
+            // Set the correct radio button for Y-axis scale
+            document.querySelector(`input[name="y-axis-scale"][value="${chartConfig.yAxisScaleType}"]`).checked = true;
+            themePresetSelect.value = 'default'; // Reset theme preset to default on init
+            // Ensure axis titles reflect the current data grid titles
+            chartConfig.xAxisTitle = columnTitleInput.value;
+            chartConfig.yAxisTitle = dataTitleInput.value;
+            
+            // Set the state of new axis display checkboxes
+            showXAxisLabelsCheckbox.checked = chartConfig.showXAxisLabels;
+            showYAxisLabelsCheckbox.checked = chartConfig.showYAxisLabels;
+            showXAxisTitleCheckbox.checked = chartConfig.showXAxisTitle;
+            showYAxisTitleCheckbox.checked = chartConfig.showYAxisTitle;
+
+            // Handle segment color palette and custom input
+            const currentSegmentColorsStr = chartConfig.segmentColors.join(',');
+            const paletteMatch = Object.keys(palettes).find(key => palettes[key].join(',') === currentSegmentColorsStr);
+            if (paletteMatch) {
+                segmentColorPaletteSelect.value = paletteMatch;
+                segmentColorsInput.value = currentSegmentColorsStr;
+                segmentColorsInput.readOnly = true;
+            } else {
+                segmentColorPaletteSelect.value = 'custom';
+                segmentColorsInput.value = currentSegmentColorsStr;
+                segmentColorsInput.readOnly = false;
+            }
+        }
+
+        /**
+         * Applies a selected theme preset to the chart configuration.
+         * @param {string} themeName - The name of the theme to apply.
+         */
+        function applyTheme(themeName) {
+            const theme = themes[themeName];
+            if (theme) {
+                Object.assign(chartConfig, theme); // Merge theme properties into chartConfig
+                initializeConfigInputs(); // Update input fields to reflect new theme
+                drawMekkoChart(); // Redraw chart
+            }
+        }
+
+        /**
+         * Applies a selected segment color palette or enables custom input.
+         * @param {string} paletteName - The name of the palette or 'custom'.
+         */
+        function applySegmentPalette(paletteName) {
+            if (paletteName === 'custom') {
+                segmentColorsInput.readOnly = false;
+            } else {
+                chartConfig.segmentColors = palettes[paletteName];
+                segmentColorsInput.value = palettes[paletteName].join(',');
+                segmentColorsInput.readOnly = true;
+                drawMekkoChart();
+            }
+        }
+
+        /**
+         * Adds event listeners to all configuration input elements.
+         * Updates chartConfig and redraws the chart on change.
+         */
+        function addConfigEventListeners() {
+            chartTitleInput.oninput = () => { chartConfig.chartTitle = chartTitleInput.value; drawMekkoChart(); };
+            backgroundColorInput.oninput = () => { chartConfig.backgroundColor = backgroundColorInput.value; drawMekkoChart(); };
+            borderColorInput.oninput = () => { chartConfig.borderColor = borderColorInput.value; drawMekkoChart(); };
+            segmentColorsInput.oninput = () => { chartConfig.segmentColors = segmentColorsInput.value.split(',').map(c => c.trim()); drawMekkoChart(); };
+            fontFamilySelect.onchange = () => { chartConfig.fontFamily = fontFamilySelect.value; drawMekkoChart(); };
+            fontSizeInput.oninput = () => { chartConfig.fontSize = parseInt(fontSizeInput.value) || 0; drawMekkoChart(); };
+            fontColorInput.oninput = () => { chartConfig.fontColor = fontColorInput.value; drawMekkoChart(); };
+            showDataLabelsInput.onchange = () => { chartConfig.showDataLabels = showDataLabelsInput.checked; drawMekkoChart(); };
+            labelPrecisionInput.oninput = () => { chartConfig.labelPrecision = parseInt(labelPrecisionInput.value) || 0; drawMekkoChart(); };
+            showGridlinesInput.onchange = () => { chartConfig.showGridlines = showGridlinesInput.checked; drawMekkoChart(); };
+            showColumnTotalsInput.onchange = () => { chartConfig.showColumnTotals = showColumnTotalsInput.checked; drawMekkoChart(); };
+            abbreviateTotalsCheckbox.onchange = () => { chartConfig.abbreviateTotals = abbreviateTotalsCheckbox.checked; drawMekkoChart(); }; // NEW
+            legendPlacementSelect.onchange = () => { chartConfig.legendPlacement = legendPlacementSelect.value; drawMekkoChart(); };
+            yAxisScaleRadios.forEach(radio => { radio.onchange = (e) => { chartConfig.yAxisScaleType = e.target.value; drawMekkoChart(); }; });
+            themePresetSelect.onchange = (e) => applyTheme(e.target.value);
+            segmentColorPaletteSelect.onchange = (e) => applySegmentPalette(e.target.value);
+            rowTitleInput.oninput = drawMekkoChart; // No direct chartConfig update, as it's just a data label
+            columnTitleInput.oninput = () => { chartConfig.xAxisTitle = columnTitleInput.value; drawMekkoChart(); };
+            dataTitleInput.oninput = () => { chartConfig.yAxisTitle = dataTitleInput.value; drawMekkoChart(); };
+            // Event listeners for new axis display checkboxes
+            showXAxisLabelsCheckbox.onchange = () => { chartConfig.showXAxisLabels = showXAxisLabelsCheckbox.checked; drawMekkoChart(); };
+            showYAxisLabelsCheckbox.onchange = () => { chartConfig.showYAxisLabels = showYAxisLabelsCheckbox.checked; drawMekkoChart(); };
+            showXAxisTitleCheckbox.onchange = () => { chartConfig.showXAxisTitle = showXAxisTitleCheckbox.checked; drawMekkoChart(); };
+            showYAxisTitleCheckbox.onchange = () => { chartConfig.showYAxisTitle = showYAxisTitleCheckbox.checked; drawMekkoChart(); };
+        }
+
+        /**
+         * Toggles the visibility of the sidebar and redraws the chart.
+         */
+        function toggleSidebar() {
+            sidebar.classList.toggle('hidden');
+            setInitialLayout(); // Re-run layout logic to set icon
+            setTimeout(drawMekkoChart, 300); // Redraw after animation to adjust layout
+        }
+
+        /**
+         * Adjusts the base font size for the sidebar content.
+         * @param {number} delta - The amount to increase or decrease the font size.
+         */
+        function adjustSidebarFontSize(delta) {
+            sidebarBaseFontSize = Math.max(10, Math.min(20, sidebarBaseFontSize + delta));
+            document.documentElement.style.setProperty('--sidebar-base-font-size', `${sidebarBaseFontSize}px`);
+        }
+        
+        /**
+         * Sets the initial layout of the app, primarily handling sidebar visibility
+         * and the toggle button icon based on screen size.
+         */
+        function setInitialLayout() {
+            const openIcon = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>`;
+            const closeIcon = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>`;
+
+            // On smaller screens, always hide sidebar initially
+            if (window.innerWidth <= 768) {
+                if (!sidebar.classList.contains('hidden')) {
+                   sidebar.classList.add('hidden');
+                }
+            }
+            
+            // Update toggle icon based on sidebar visibility
+            if (sidebar.classList.contains('hidden')) {
+                toggleIcon.innerHTML = openIcon;
+            } else {
+                toggleIcon.innerHTML = closeIcon;
+            }
+        }
+
+        /**
+         * Draws the Mekko chart using D3.js.
+         * This function calculates dynamic margins, scales, and positions
+         * all chart elements, including axes, labels, segments, and legend.
+         */
+        function drawMekkoChart() {
+            const containerRect = chartContainer.getBoundingClientRect();
+            let currentSvgWidth = containerRect.width;
+            let currentSvgHeight = containerRect.height;
+
+            const fs = chartConfig.fontSize; // Base font size for chart elements
+
+            // Dynamic margins based on font size and potential label lengths
+            let chartContentMargin = { 
+                top: Math.max(margin.top, (fs * 1.8) + 40), // Title space
+                bottom: Math.max(margin.bottom, (fs * 2.5) + 40), // X-axis labels and title space
+                left: Math.max(margin.left, (fs * 1.5) + 45), // Y-axis labels and title space
+                right: margin.right,
+            };
+            
+            // Adjust left margin if sidebar is hidden to ensure chart takes full width
+            if (sidebar.classList.contains('hidden') && window.innerWidth > 768) {
+                chartContentMargin.left = Math.max(chartContentMargin.left, 100);
+            }
+
+            // Legend calculations
+            const legendRectSize = 12, legendTextOffset = 17, legendLineHeight = fs * 1.5, legendPadding = 10, legendItemHorizontalSpacing = 20;
+            let legendCalculatedHeight = 0; // Tracks height needed for legend when above/below
+
+            if (chartData.rowLabels.length > 0) {
+                // Estimate text width for dynamic layout calculations
+                const estimateTextWidth = text => text.length * (fs * 0.6); 
+                if (chartConfig.legendPlacement === 'right') {
+                    // When legend is on the right, increase right margin based on max label width
+                    const maxTextWidth = d3.max(chartData.rowLabels, d => estimateTextWidth(d));
+                    chartContentMargin.right += legendRectSize + legendTextOffset + maxTextWidth + legendPadding;
+                } else {
+                    // When legend is above or below, calculate rows needed
+                    const maxItemTextWidth = d3.max(chartData.rowLabels, d => estimateTextWidth(d));
+                    const estimatedItemWidth = legendRectSize + legendTextOffset + maxItemTextWidth + legendItemHorizontalSpacing;
+                    const availableSpace = Math.max(1, currentSvgWidth - chartContentMargin.left - chartContentMargin.right);
+                    const itemsPerRow = Math.max(1, Math.floor(availableSpace / estimatedItemWidth));
+                    const numRows = Math.ceil(chartData.rowLabels.length / itemsPerRow);
+                    legendCalculatedHeight = numRows * legendLineHeight + (numRows > 1 ? legendPadding : 0); // Add padding if multiple rows
+                    if (chartConfig.legendPlacement === 'below') chartContentMargin.bottom += legendCalculatedHeight + legendPadding;
+                    else if (chartConfig.legendPlacement === 'above') chartContentMargin.top += legendCalculatedHeight + legendPadding * 2;
+                }
+            }
+            
+            // Calculate actual chart width and height based on container and dynamic margins
+            width = Math.max(1, currentSvgWidth - chartContentMargin.left - chartContentMargin.right);
+            height = Math.max(1, currentSvgHeight - chartContentMargin.top - chartContentMargin.bottom);
+
+            // Clear previous chart and set SVG dimensions and background
+            chartSvg.selectAll('*').remove();
+            chartSvg.attr('width', currentSvgWidth).attr('height', currentSvgHeight).style('background-color', chartConfig.backgroundColor);
+            // Append main group for chart content, translated by the calculated margins
+            const g = chartSvg.append('g').attr('transform', `translate(${chartContentMargin.left},${chartContentMargin.top})`);
+
+            // Calculate column totals and overall total
+            const columnTotals = chartData.columnLabels.map((_, i) => d3.sum(chartData.values, d => d[i]));
+            const overallTotal = d3.sum(columnTotals);
+
+            // Display "No data" message if there's no data
+            if (overallTotal === 0) {
+                g.append("text").attr("x", width/2).attr("y", height/2).attr("text-anchor", "middle").attr("fill", chartConfig.fontColor).text("No data to display.");
+                return;
+            }
+
+            // X-scale for column widths (based on absolute total values)
+            const x = d3.scaleLinear().domain([0, overallTotal]).range([0, width]);
+            // Y-scale for segment heights (can be absolute or percentage)
+            const y = chartConfig.yAxisScaleType === 'percentage' 
+                ? d3.scaleLinear().domain([0, 1]).range([height, 0])
+                : d3.scaleLinear().domain([0, d3.max(columnTotals) || 1]).range([height, 0]);
+
+            // Color scale for segments, mapping row labels to configured colors
+            const color = d3.scaleOrdinal(chartConfig.segmentColors).domain(chartData.rowLabels);
+
+            let currentX = 0; // Keeps track of current X position for columns
+            // Process chart data to calculate segment positions and dimensions
+            const chartDataProcessed = chartData.columnLabels.map((colLabel, i) => {
+                const colTotal = columnTotals[i];
+                const colWidth = x(colTotal);
+                let accumulatedY = 0; // Accumulates segment heights for stacking
+                const segments = chartData.rowLabels.map((rowLabel, j) => {
+                    const value = chartData.values[j][i];
+                    const segment = {
+                        value: value,
+                        x: currentX,
+                        width: colWidth,
+                        color: color(rowLabel)
+                    };
+                    if (chartConfig.yAxisScaleType === 'percentage') {
+                        segment.height = colTotal > 0 ? (value / colTotal) * height : 0;
+                        segment.y = height - accumulatedY - segment.height; // D3 y-axis is inverted
+                        segment.displayValue = colTotal > 0 ? (value / colTotal) * 100 : 0;
+                    } else {
+                        segment.y = y(accumulatedY + value); // Y position for absolute values
+                        segment.height = y(accumulatedY) - y(accumulatedY + value);
+                        segment.displayValue = value;
+                    }
+                    accumulatedY += segment.height;
+                    return segment;
+                });
+                currentX += colWidth; // Advance X position for the next column
+                return { column: colLabel, segments: segments, x: currentX - colWidth/2 }; // Store column center X for labels
+            });
+
+            // Draw chart segments (rectangles) and data labels
+            g.selectAll('.column-group').data(chartDataProcessed).enter().append('g')
+                .each(function(d) {
+                    d3.select(this).selectAll('rect').data(d.segments).enter().append('rect')
+                        .attr('x', s => s.x).attr('y', s => s.y).attr('width', s => s.width).attr('height', s => s.height)
+                        .attr('fill', s => s.color).attr('stroke', chartConfig.borderColor).attr('stroke-width', 1.5).attr('rx', 4);
+                    
+                    if(chartConfig.showDataLabels) {
+                        d3.select(this).selectAll('text').data(d.segments).enter().append('text')
+                            .attr('class', 'segment-label').attr('x', s => s.x + s.width/2).attr('y', s => s.y + s.height/2).attr('dy', '0.35em')
+                            .attr('font-family', chartConfig.fontFamily).attr('font-size', `${fs * 0.9}px`).attr('fill', chartConfig.fontColor)
+                            .text(s => (s.width > 20 && s.height > 15 && s.displayValue !== 0) ? `${s.displayValue.toFixed(chartConfig.labelPrecision)}${chartConfig.yAxisScaleType === 'percentage' ? '%' : ''}`: '');
+                    }
+                });
+            
+            // Conditional rendering for X-Axis Labels
+            if (chartConfig.showXAxisLabels) {
+                g.append('g').attr('transform', `translate(0, ${height})`).selectAll('.column-label').data(chartDataProcessed).enter().append('text')
+                    .attr('class', 'column-label').attr('x', d => d.x).attr('y', fs * 1.5)
+                    .attr('font-family', chartConfig.fontFamily).attr('font-size', `${fs}px`).attr('fill', chartConfig.fontColor)
+                    .text((d, i) => {
+                        if (!chartConfig.showColumnTotals) return d.column;
+                        
+                        let totalStr;
+                        if (chartConfig.abbreviateTotals) {
+                            // Use d3.format for smart abbreviation (e.g., 1.2M, 500k)
+                            // Replace D3's 'G' for Giga with 'B' for Billion and 'M' for Mega with 'm' for million
+                            totalStr = d3.format(".2s")(columnTotals[i])
+                                         .replace('G', 'B')
+                                         .replace('M', 'm');
+                        } else {
+                            // Use locale string for standard formatting with commas
+                            totalStr = columnTotals[i].toLocaleString();
+                        }
+                        return `${d.column} (${totalStr})`;
+                    });
+            }
+
+            // Chart Title
+            chartSvg.append('text').attr('class', 'chart-title').attr('x', chartContentMargin.left + width/2).attr('y', chartContentMargin.top / 2 + 10).attr('font-family', chartConfig.fontFamily)
+                .attr('font-size', `${fs * 1.8}px`).attr('fill', chartConfig.fontColor).text(chartConfig.chartTitle);
+
+            // Conditional rendering for Y-Axis Title
+            if (chartConfig.showYAxisTitle) {
+                const yAxisTitleText = chartConfig.yAxisScaleType === 'percentage' ? 'Percentage' : (dataTitleInput.value || 'Patients');
+                // REVISED: Adjust 'y' attribute for the Y-axis title dynamically to prevent overlap.
+                // This value is negative as it's rotated, moving it further left (away from axis).
+                // Using a larger multiplier of the margin provides more robust padding.
+                const yAxisTitlePadding = chartContentMargin.left * 0.8;
+                g.append('text').attr('class', 'axis-title').attr('transform', 'rotate(-90)').attr('y', -yAxisTitlePadding) 
+                    .attr('x', -height/2).attr('font-family', chartConfig.fontFamily).attr('font-size', `${fs*1.2}px`).attr('fill', chartConfig.fontColor).text(yAxisTitleText);
+            }
+            
+            // Conditional rendering for X-Axis Title
+            if (chartConfig.showXAxisTitle) {
+                g.append('text').attr('class', 'axis-title').attr('x', width/2).attr('y', height + fs * 3.5)
+                    .attr('font-family', chartConfig.fontFamily).attr('font-size', `${fs*1.2}px`).attr('fill', chartConfig.fontColor).text(columnTitleInput.value);
+            }
+
+            // Conditional rendering for Y-Axis Labels (ticks and values)
+            if (chartConfig.showYAxisLabels) {
+                const yAxisGroup = g.append('g').attr('class', 'axis y-axis')
+                    .call(d3.axisLeft(y).tickFormat(d => chartConfig.yAxisScaleType === 'percentage' ? `${d * 100}%` : d3.format(".0f")(d)));
+                yAxisGroup.selectAll("text").attr("fill", chartConfig.fontColor).attr("font-family", chartConfig.fontFamily).attr("font-size", `${fs}px`);
+                yAxisGroup.selectAll("line, path").attr("stroke", chartConfig.borderColor);
+            }
+
+            // Render gridlines if enabled
+            if (chartConfig.showGridlines) g.append("g").attr("class", "grid y-grid").call(d3.axisLeft(y).tickSize(-width).tickFormat(""));
+
+            // Legend rendering
+            const legend = chartSvg.append('g').attr('class', 'legend').attr('font-family', chartConfig.fontFamily).attr('font-size', `${fs * 0.9}px`).attr('fill', chartConfig.fontColor);
+            const legendItems = legend.selectAll('.legend-item').data(chartData.rowLabels).enter().append('g').attr('class', 'legend-item');
+            legendItems.append('rect').attr('width', legendRectSize).attr('height', legendRectSize).attr('fill', d => color(d)).attr('stroke', chartConfig.borderColor);
+            legendItems.append('text').attr('x', legendTextOffset).attr('y', legendRectSize/2).attr('dy', '0.35em').text(d => d);
+
+            if (chartConfig.legendPlacement === 'right') {
+                // Position legend items vertically on the right
+                legendItems.attr('transform', (d, i) => `translate(${chartContentMargin.left + width + legendPadding}, ${chartContentMargin.top + i * legendLineHeight})`);
+            } else {
+                // Position legend items horizontally, wrapping if necessary
+                let xPos = chartContentMargin.left, yPos;
+                if(chartConfig.legendPlacement === 'below') yPos = chartContentMargin.top + height + fs * 5;
+                else yPos = (chartContentMargin.top - legendCalculatedHeight - legendPadding);
+                const availableWidth = currentSvgWidth - chartContentMargin.left - chartContentMargin.right;
+                legendItems.attr('transform', function() {
+                    const itemWidth = this.getBBox().width + legendItemHorizontalSpacing;
+                    if (xPos + itemWidth > chartContentMargin.left + availableWidth) {
+                        xPos = chartContentMargin.left; yPos += legendLineHeight;
+                    }
+                    const transform = `translate(${xPos}, ${yPos})`;
+                    xPos += itemWidth;
+                    return transform;
+                });
+            }
+        }
+
+        /**
+         * Saves the current chart data and configuration to a JSON file.
+         */
+        function saveData() {
+            const state = {
+                chartData: chartData,
+                chartConfig: chartConfig,
+                dataTitles: {
+                    row: rowTitleInput.value,
+                    column: columnTitleInput.value,
+                    data: dataTitleInput.value
+                }
+            };
+            const dataStr = JSON.stringify(state, null, 2);
+            const blob = new Blob([dataStr], {type: "application/json"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'mekko-chart-data.json';
+            a.click();
+            URL.revokeObjectURL(url); // Release the object URL
+        }
+
+        /**
+         * Loads chart data and configuration from a selected JSON file.
+         * @param {Event} e - The change event from the file input.
+         */
+        function loadData(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const state = JSON.parse(event.target.result);
+                    // Basic validation to ensure the loaded file has expected structure
+                    if (state.chartData && state.chartConfig && state.dataTitles) {
+                        chartData = state.chartData;
+                        chartConfig = state.chartConfig;
+                        rowTitleInput.value = state.dataTitles.row;
+                        columnTitleInput.value = state.dataTitles.column;
+                        dataTitleInput.value = state.dataTitles.data;
+
+                        // Re-initialize the entire UI to reflect loaded data
+                        initializeDataGrid();
+                        initializeConfigInputs();
+                        drawMekkoChart();
+                    } else {
+                        // Using a custom modal instead of alert()
+                        showConfirmationModal('Invalid data file format. Please ensure it is a valid Mekko chart JSON file.', () => {});
+                    }
+                } catch (error) {
+                    // Using a custom modal instead of alert()
+                    showConfirmationModal('Error reading the data file. Please ensure it is a valid JSON file.', () => {});
+                    console.error("Error parsing loaded data:", error);
+                }
+            };
+            reader.readAsText(file);
+            // Reset input value to allow loading the same file again if needed
+            e.target.value = '';
+        }
+
+        /**
+         * Exports the Mekko chart as a PNG image.
+         * It temporarily hides the toggle sidebar button to ensure a clean export.
+         */
+        function exportChartAsPng() {
+            const svgElement = document.getElementById('mekko-chart');
+            if (!svgElement) {
+                showConfirmationModal('Chart SVG element not found.', () => {});
+                return;
+            }
+
+            // Temporarily hide the toggle button to ensure it's not captured
+            const toggleButton = document.getElementById('toggle-sidebar-btn');
+            toggleButton.style.display = 'none';
+
+            // Create a temporary clone of the SVG to ensure all styles are inline
+            const clonedSvgElement = svgElement.cloneNode(true);
+            // Set double resolution for better quality PNG
+            clonedSvgElement.setAttribute('width', svgElement.clientWidth * 2); 
+            clonedSvgElement.setAttribute('height', svgElement.clientHeight * 2);
+            clonedSvgElement.setAttribute('viewBox', `0 0 ${svgElement.clientWidth} ${svgElement.clientHeight}`);
+
+            // Apply current chart background color directly to SVG for consistent export
+            clonedSvgElement.style.backgroundColor = chartConfig.backgroundColor;
+
+            // Serialize SVG to string and create a Blob URL
+            const svgData = new XMLSerializer().serializeToString(clonedSvgElement);
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const svgUrl = URL.createObjectURL(svgBlob);
+
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = clonedSvgElement.width.baseVal.value; // Use the cloned SVG's doubled width
+                canvas.height = clonedSvgElement.height.baseVal.value; // Use the cloned SVG's doubled height
+                const ctx = canvas.getContext('2d');
+
+                // Fill canvas background
+                ctx.fillStyle = chartConfig.backgroundColor;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.drawImage(img, 0, 0);
+
+                // Create a download link for the PNG
+                const link = document.createElement('a');
+                link.download = 'mekko-chart.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+
+                URL.revokeObjectURL(svgUrl); // Clean up the URL
+                toggleButton.style.display = 'flex'; // Restore button visibility
+            };
+            img.onerror = (error) => {
+                console.error('Error loading SVG image for PNG export:', error);
+                showConfirmationModal('Could not export chart as PNG. An error occurred during SVG rendering.', () => {});
+                URL.revokeObjectURL(svgUrl);
+                toggleButton.style.display = 'flex'; // Restore button visibility
+            };
+            img.src = svgUrl;
+        }
+
+        /**
+         * Exports the Mekko chart as an SVG file.
+         */
+        function exportChartAsSvg() {
+            const svgElement = document.getElementById('mekko-chart');
+            const svgData = new XMLSerializer().serializeToString(svgElement);
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const svgUrl = URL.createObjectURL(svgBlob);
+            const downloadLink = document.createElement('a');
+            downloadLink.href = svgUrl;
+            downloadLink.download = 'mekko-chart.svg';
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            URL.revokeObjectURL(svgUrl);
+        }
+
+        // Sidebar Resizing Logic
+        let isResizing = false;
+        sidebarResizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.cursor = 'ew-resize'; // Change cursor to indicate resizing
+            document.addEventListener('mousemove', resizeSidebar);
+            document.addEventListener('mouseup', stopResizing);
+        });
+
+        /**
+         * Handles the sidebar resizing based on mouse movement.
+         * @param {Event} e - The mousemove event.
+         */
+        function resizeSidebar(e) {
+            if (!isResizing) return;
+            const newWidth = Math.max(250, e.clientX); // Minimum sidebar width of 250px
+            sidebar.style.width = `${newWidth}px`;
+            drawMekkoChart(); // Redraw chart when sidebar size changes
+        }
+
+        /**
+         * Stops the sidebar resizing operation.
+         */
+        function stopResizing() {
+            isResizing = false;
+            document.body.style.cursor = ''; // Reset cursor
+            document.removeEventListener('mousemove', resizeSidebar);
+            document.removeEventListener('mouseup', stopResizing);
+        }
+
+        // --- Initial Setup ---
+        window.onload = () => {
+            initializeDataGrid();
+            initializeConfigInputs();
+            addConfigEventListeners();
+            setInitialLayout();
+            drawMekkoChart(); // Initial chart draw
+
+            // Add event listeners for core UI interactions
+            toggleSidebarBtn.addEventListener('click', toggleSidebar);
+            closeSidebarBtn.addEventListener('click', toggleSidebar);
+            transposeBtn.addEventListener('click', transposeData);
+            decreaseFontBtn.addEventListener('click', () => adjustSidebarFontSize(-1));
+            increaseFontBtn.addEventListener('click', () => adjustSidebarFontSize(1));
+            saveDataBtn.addEventListener('click', saveData);
+            loadDataInput.addEventListener('change', loadData);
+            exportPngBtn.addEventListener('click', exportChartAsPng);
+            exportSvgBtn.addEventListener('click', exportChartAsSvg);
+        };
+
+        // Redraw chart and adjust layout on window resize
+        window.addEventListener('resize', () => {
+            setInitialLayout();
+            drawMekkoChart();
+        });
+
+    </script>
+</body>
+</html>
