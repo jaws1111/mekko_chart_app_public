@@ -7,7 +7,7 @@
     <meta name="description" content="Generate Mekko charts quickly with free tool at mekkochart.vercel.app. Customize colors, formatting, and sizes for data visualizations.">
     <meta name="keywords" content="Mekko chart, chart generator, data visualization, custom charts, free chart tool">
     <meta name="author" content="Andrius Varanavicius">
-    <meta name="application-version" content="0.12.4">
+    <meta name="application-version" content="0.13.2">
     <meta name="robots" content="index, follow">
     <meta property="og:title" content="Mekko Chart Generator - Create Custom Charts">
     <meta property="og:description" content="Easily create and customize Mekko charts with our free online tool at mekkochart.vercel.app. Perfect for data visualization.">
@@ -29,7 +29,7 @@
       "description": "A free online tool to create and customize Mekko charts for data visualization.",
       "applicationCategory": "Data Visualization Tool",
       "operatingSystem": "Web",
-      "softwareVersion": "0.12.4",
+      "softwareVersion": "0.13.2",
       "url": "https://mekkochart.vercel.app/",
       "offers": {
         "@type": "Offer",
@@ -48,6 +48,10 @@
 
     <style>
         /* Custom styles for smooth transitions and specific elements */
+        :root {
+            --sidebar-base-font-size: 14px;
+        }
+
         body {
             font-family: 'Inter', sans-serif;
             overflow: hidden;
@@ -63,7 +67,6 @@
         }
 
         #sidebar {
-            --sidebar-base-font-size: 14px;
             font-size: var(--sidebar-base-font-size);
             width: var(--sidebar-width, 350px);
             min-width: 280px;
@@ -156,6 +159,7 @@
             background-color: #f1f5f9;
             font-weight: 600;
             padding: 0.2rem 0.1rem;
+            position: relative;
         }
 
         .data-grid input[type="text"],
@@ -168,6 +172,41 @@
             background-color: transparent; /* Allow cell color to show through */
             font-family: 'Inter', sans-serif;
             font-size: inherit;
+        }
+        
+        .data-grid .column-header-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+        }
+        
+        .data-grid .column-controls {
+            display: flex;
+            flex-direction: column;
+            position: absolute;
+            right: 1px;
+            top: 1px;
+        }
+        
+        .table-action-button, .font-size-control-btn {
+            background-color: #e2e8f0;
+            border: none;
+            color: #475569;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            padding: 0;
+        }
+        .table-action-button:hover, .font-size-control-btn:hover {
+            background-color: #cbd5e1;
+        }
+        .font-size-control-btn {
+            width: 16px; height: 16px;
         }
 
         .data-grid input[type="number"]::-webkit-inner-spin-button,
@@ -218,6 +257,19 @@
             width: 100%;
             border-radius: 0.375rem;
             border: 1px solid #cbd5e1;
+        }
+        
+        .font-size-input-wrapper {
+            position: relative;
+        }
+        .font-size-input-wrapper .font-size-controls {
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
         }
 
         /* Responsive adjustments */
@@ -296,12 +348,8 @@
         #about-modal a { color: #3b82f6; }
         #about-modal .terms { font-size: 0.75rem; max-height: 100px; overflow-y: auto; border: 1px solid #e5e7eb; padding: 0.5rem; border-radius: 0.25rem; margin-top: 0.5rem; }
         
-        /* Z-index fix for confirmation modal */
-        #confirmation-modal {
-            z-index: 110;
-        }
+        #confirmation-modal { z-index: 110; }
 
-        /* Fullscreen Data Grid Modal */
         #data-grid-modal .modal-content {
             width: 95vw;
             height: 90vh;
@@ -316,7 +364,6 @@
             border-radius: 0.25rem;
         }
 
-        /* Tooltip Styles */
         #tooltip {
             position: absolute;
             opacity: 0;
@@ -338,9 +385,13 @@
             <div id="sidebar-resizer"></div>
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold text-gray-900">Mekko Chart Settings</h2>
-                <button id="close-sidebar-btn" class="md:hidden p-2 rounded-full hover:bg-gray-200 text-gray-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
+                <div class="flex items-center gap-2">
+                    <button id="decrease-sidebar-font" class="p-1 rounded-full hover:bg-gray-200 text-gray-600 font-bold">-</button>
+                    <button id="increase-sidebar-font" class="p-1 rounded-full hover:bg-gray-200 text-gray-600 font-bold">+</button>
+                    <button id="close-sidebar-btn" class="md:hidden p-2 rounded-full hover:bg-gray-200 text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
             </div>
 
             <div class="sidebar-accordion">
@@ -364,7 +415,10 @@
                 <details open>
                     <summary class="flex items-center justify-between">
                         <span>Data Input</span>
-                        <div class="flex items-center">
+                        <div class="flex items-center gap-2">
+                            <button id="delete-all-data-btn" title="Delete All Data" class="p-1 hover:bg-gray-200 rounded-full">
+                                <svg class="w-5 h-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
+                            </button>
                             <button id="maximize-grid-btn" title="Maximize Data Grid" class="p-1 hover:bg-gray-200 rounded-full">
                                 <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5"></path></svg>
                             </button>
@@ -374,30 +428,53 @@
                     <div class="accordion-content space-y-3 pt-4">
                         <div>
                             <label for="row-title-input" class="sidebar-label">Row Title:</label>
-                            <input type="text" id="row-title-input" class="sidebar-input" value="Generation Type">
+                             <div class="font-size-input-wrapper">
+                                <input type="text" id="row-title-input" class="sidebar-input" value="Generation Type">
+                                <div class="font-size-controls">
+                                    <button class="font-size-control-btn" data-target="rowTitleFontSize" data-step="1">▲</button>
+                                    <button class="font-size-control-btn" data-target="rowTitleFontSize" data-step="-1">▼</button>
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <label for="column-title-input" class="sidebar-label">Column Title:</label>
-                            <input type="text" id="column-title-input" class="sidebar-input" value="Countries">
+                            <div class="font-size-input-wrapper">
+                                <input type="text" id="column-title-input" class="sidebar-input" value="Countries">
+                                <div class="font-size-controls">
+                                    <button class="font-size-control-btn" data-target="columnTitleFontSize" data-step="1">▲</button>
+                                    <button class="font-size-control-btn" data-target="columnTitleFontSize" data-step="-1">▼</button>
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <label for="data-title-input" class="sidebar-label">Data Title (for Y-Axis):</label>
-                            <input type="text" id="data-title-input" class="sidebar-input" value="Share %">
+                            <div class="font-size-input-wrapper">
+                                <input type="text" id="data-title-input" class="sidebar-input" value="Share %">
+                                 <div class="font-size-controls">
+                                    <button class="font-size-control-btn" data-target="dataTitleFontSize" data-step="1">▲</button>
+                                    <button class="font-size-control-btn" data-target="dataTitleFontSize" data-step="-1">▼</button>
+                                </div>
+                            </div>
                         </div>
                         <div id="sidebar-grid-container" class="data-grid-container">
-                            <!-- Sidebar grid rendered here -->
                         </div>
                         <button id="transpose-btn" class="w-full px-4 py-2 text-sm font-medium text-white bg-gray-500 rounded-md hover:bg-gray-600">Transpose Table</button>
                     </div>
                 </details>
 
                 <!-- Chart Appearance Section -->
-                <details> <!-- Removed 'open' attribute here -->
+                <details>
                     <summary>Chart Appearance <span class="accordion-icon">&gt;</span></summary>
                     <div class="accordion-content space-y-4 pt-4">
                         <div>
                             <label for="chart-title" class="sidebar-label">Chart Title:</label>
-                            <input type="text" id="chart-title" class="sidebar-input">
+                            <div class="font-size-input-wrapper">
+                                <input type="text" id="chart-title" class="sidebar-input">
+                                <div class="font-size-controls">
+                                    <button class="font-size-control-btn" data-target="chartTitleFontSize" data-step="1">▲</button>
+                                    <button class="font-size-control-btn" data-target="chartTitleFontSize" data-step="-1">▼</button>
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <label class="sidebar-label">Theme:</label>
@@ -485,7 +562,7 @@
                             </div>
                         </div>
                         <div>
-                            <label class="sidebar-label">Font:</label>
+                            <label class="sidebar-label">Overall Font Settings:</label>
                             <div class="grid grid-cols-2 gap-2">
                                 <select id="font-family" class="sidebar-select">
                                     <option>Lato, sans-serif</option>
@@ -497,12 +574,17 @@
                                 <input type="color" id="font-color" class="w-full h-8 rounded-md border border-gray-300 cursor-pointer col-span-2">
                             </div>
                         </div>
+                         <div>
+                            <label for="legend-font-size" class="sidebar-label">Legend Font Size:</label>
+                            <input type="number" id="legend-font-size" class="sidebar-input" value="12" min="8" max="30">
+                        </div>
                         <div>
                             <label class="sidebar-label">Legend Placement:</label>
                             <select id="legend-placement" class="sidebar-select">
                                 <option value="right">Right of Chart</option>
                                 <option value="below">Below Chart</option>
                                 <option value="above">Above Chart</option>
+                                <option value="none">None</option>
                             </select>
                         </div>
                     </div>
@@ -546,16 +628,10 @@
             </button>
             <h3>About Quick Mekko Chart</h3>
             <p>A simple, powerful tool for creating Mekko charts directly in your browser.</p>
-            
             <h4>Author: Andrius Varanavicius</h4>
-                
             <h4><a href="mailto:andriusv@mail.com?subject=Mekko%20Chart%20App%20Feedback">Send feedback here!</a></h4>
-            
-
             <h4>Terms of Use:</h4>
-  
-                <p>This application is provided "as is", without warranty of any kind. By using this app, you agree to not hold the author liable for any damages or issues arising from its use.</p>
- 
+            <p>This application is provided "as is", without warranty of any kind. By using this app, you agree to not hold the author liable for any damages or issues arising from its use.</p>
         </div>
     </div>
 
@@ -567,7 +643,6 @@
             </button>
             <h3 class="text-left">Data Grid</h3>
             <div id="modal-grid-container" class="data-grid-container">
-                <!-- Cloned grid will be inserted here -->
             </div>
         </div>
     </div>
@@ -578,17 +653,17 @@
         const margin = { top: 60, right: 40, bottom: 100, left: 80 };
         let width, height;
 
-const defaultData = {
-  columnLabels: ['China', 'United States', 'European Union', 'India', 'Japan'],
-  rowLabels: ['Coal', 'Natural Gas', 'Hydro', 'Wind', 'Solar'],
-  values: [
-    [4600, 1000, 333, 2250, 700],     // Coal
-    [1500, 1800, 452, 600, 900],      // Gas
-    [1300, 250, 317, 175, 80],        // Hydro
-    [824, 436, 721, 50, 40],          // Wind
-    [584, 238, 246, 113, 100]         // Solar
-  ]
-};
+        const defaultData = {
+          columnLabels: ['China', 'United States', 'European Union', 'India', 'Japan'],
+          rowLabels: ['Coal', 'Natural Gas', 'Hydro', 'Wind', 'Solar'],
+          values: [
+            [4600, 1000, 333, 2250, 700],
+            [1500, 1800, 452, 600, 900],
+            [1300, 250, 317, 175, 80],
+            [824, 436, 721, 50, 40],
+            [584, 238, 246, 113, 100]
+          ]
+        };
 
         const defaultChartConfig = {
             chartTitle: 'Electricity Generation by Source in Major Regions (2023, TWh)',
@@ -599,12 +674,17 @@ const defaultData = {
             fontFamily: 'Lato, sans-serif', 
             fontSize: 12,
             fontColor: '#475569',
+            legendFontSize: 12, // New: separate legend font size
+            chartTitleFontSize: 22, // New: individual title font sizes
+            rowTitleFontSize: 14,
+            columnTitleFontSize: 14,
+            dataTitleFontSize: 14,
             showDataLabels: true,
             labelPrecision: 0,
             showGridlines: false, 
             yAxisTicks: 5,
-            showColumnTotals: true, // Changed to true
-            abbreviateTotals: true, // Changed to true
+            showColumnTotals: true,
+            abbreviateTotals: true,
             legendPlacement: 'right',
             showXAxisLabels: true,
             showYAxisLabels: true,
@@ -637,7 +717,7 @@ const defaultData = {
         const chartContainer = document.getElementById('chart-container');
         const chartSvg = d3.select('#mekko-chart');
         const tooltip = d3.select('#tooltip');
-        const toggleIcon = document.getElementById('toggle-icon'); // Get the toggle icon element
+        const toggleIcon = document.getElementById('toggle-icon');
         
         // Modal elements
         const confirmationModal = document.getElementById('confirmation-modal');
@@ -645,21 +725,8 @@ const defaultData = {
         const dataGridModal = document.getElementById('data-grid-modal');
         let modalOnConfirmCallback = null;
 
-        /**
-         * Shows a modal.
-         * @param {HTMLElement} modalEl - The modal element to show.
-         */
-        function showModal(modalEl) {
-            modalEl.classList.add('visible');
-        }
-
-        /**
-         * Hides a modal.
-         * @param {HTMLElement} modalEl - The modal element to hide.
-         */
-        function hideModal(modalEl) {
-            modalEl.classList.remove('visible');
-        }
+        function showModal(modalEl) { modalEl.classList.add('visible'); }
+        function hideModal(modalEl) { modalEl.classList.remove('visible'); }
         
         function showConfirmationModal(message, onConfirm) {
             document.getElementById('modal-message').textContent = message;
@@ -667,9 +734,6 @@ const defaultData = {
             showModal(confirmationModal);
         }
 
-        /**
-         * Determines contrasting text color for a given background color.
-         */
         function getContrastingTextColor(color) {
             const d3Color = d3.color(color);
             if (!d3Color) return '#333333';
@@ -677,15 +741,10 @@ const defaultData = {
             return luma < 128 ? '#FFFFFF' : '#333333';
         }
 
-        /**
-         * Renders the data grid into a specified container.
-         * @param {string} containerId - The ID of the container for the grid table.
-         */
         function renderDataGrid(containerId) {
             const container = document.getElementById(containerId);
             if (!container) return;
 
-            // Clear previous grid and create a new table
             container.innerHTML = '';
             const table = document.createElement('table');
             table.className = 'data-grid';
@@ -697,14 +756,49 @@ const defaultData = {
 
             chartData.columnLabels.forEach((label, colIndex) => {
                 const th = document.createElement('th');
-                th.innerHTML = `<div class="flex items-center justify-center gap-1"><button class="table-action-button add-col-btn" data-col-index="${colIndex}">+</button><input type="text" value="${label}" data-col-index="${colIndex}" class="column-label-input"><button class="table-action-button remove-col-btn" data-col-index="${colIndex}">-</button></div>`;
+                const canMoveLeft = colIndex > 0;
+                const canMoveRight = colIndex < chartData.columnLabels.length - 1;
+                
+                th.innerHTML = `
+                    <div class="column-header-content">
+                        <button class="table-action-button move-col-left-btn" data-col-index="${colIndex}" ${!canMoveLeft ? 'disabled style="opacity:0.3; cursor:not-allowed;"' : ''}>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                        </button>
+                        <input type="text" value="${label}" data-col-index="${colIndex}" class="column-label-input">
+                        <button class="table-action-button move-col-right-btn" data-col-index="${colIndex}" ${!canMoveRight ? 'disabled style="opacity:0.3; cursor:not-allowed;"' : ''}>
+                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </button>
+                    </div>
+                    <div class="column-controls">
+                        <button class="table-action-button add-col-btn" data-col-index="${colIndex}" title="Add column right">+</button>
+                        <button class="table-action-button remove-col-btn" data-col-index="${colIndex}" title="Remove column">-</button>
+                    </div>
+                `;
                 columnHeadersRow.appendChild(th);
             });
 
             chartData.values.forEach((rowValues, rowIndex) => {
                 const tr = document.createElement('tr');
                 const th = document.createElement('th');
-                th.innerHTML = `<div class="flex items-center justify-center gap-1"><button class="table-action-button add-row-btn" data-row-index="${rowIndex}">+</button><input type="text" value="${chartData.rowLabels[rowIndex]}" data-row-index="${rowIndex}" class="row-label-input"><button class="table-action-button remove-row-btn" data-row-index="${rowIndex}">-</button></div>`;
+                const canMoveUp = rowIndex > 0;
+                const canMoveDown = rowIndex < chartData.rowLabels.length - 1;
+                th.innerHTML = `
+                    <div class="flex items-center justify-center gap-1 p-1">
+                        <input type="text" value="${chartData.rowLabels[rowIndex]}" data-row-index="${rowIndex}" class="row-label-input flex-grow">
+                        <div class="flex flex-col gap-px">
+                            <button class="table-action-button move-row-up-btn" data-row-index="${rowIndex}" title="Move row up" ${!canMoveUp ? 'disabled style="opacity:0.3; cursor:not-allowed;"' : ''}>
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 15l7-7 7 7"></path></svg>
+                            </button>
+                            <button class="table-action-button move-row-down-btn" data-row-index="${rowIndex}" title="Move row down" ${!canMoveDown ? 'disabled style="opacity:0.3; cursor:not-allowed;"' : ''}>
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                        </div>
+                        <div class="flex flex-col gap-px">
+                            <button class="table-action-button add-row-btn" data-row-index="${rowIndex}" title="Add row below">+</button>
+                            <button class="table-action-button remove-row-btn" data-row-index="${rowIndex}" title="Remove row">-</button>
+                        </div>
+                    </div>
+                `;
                 tr.appendChild(th);
                 rowValues.forEach((value, colIndex) => {
                     const td = document.createElement('td');
@@ -716,11 +810,6 @@ const defaultData = {
             addGridEventListeners(containerId);
         }
 
-
-        /**
-         * Attaches event listeners to the data grid inputs and buttons.
-         * @param {string} containerId - The ID of the grid's container.
-         */
         function addGridEventListeners(containerId) {
             const container = document.getElementById(containerId);
             if (!container) return;
@@ -752,6 +841,14 @@ const defaultData = {
                     reRenderGrids();
                 }
             };
+            const moveRow = (fromIndex, toIndex) => {
+                if (toIndex < 0 || toIndex >= chartData.rowLabels.length) return;
+                const [label] = chartData.rowLabels.splice(fromIndex, 1);
+                chartData.rowLabels.splice(toIndex, 0, label);
+                const [rowData] = chartData.values.splice(fromIndex, 1);
+                chartData.values.splice(toIndex, 0, rowData);
+                reRenderGrids();
+            };
             const addColumn = (atIndex) => {
                 chartData.columnLabels.splice(atIndex + 1, 0, `Category ${chartData.columnLabels.length + 1}`);
                 chartData.values.forEach(row => row.splice(atIndex + 1, 0, 0));
@@ -764,20 +861,31 @@ const defaultData = {
                     reRenderGrids();
                 }
             };
+            const moveColumn = (fromIndex, toIndex) => {
+                if (toIndex < 0 || toIndex >= chartData.columnLabels.length) return;
+                const [label] = chartData.columnLabels.splice(fromIndex, 1);
+                chartData.columnLabels.splice(toIndex, 0, label);
+                chartData.values.forEach(row => {
+                    const [value] = row.splice(fromIndex, 1);
+                    row.splice(toIndex, 0, value);
+                });
+                reRenderGrids();
+            };
 
-            container.querySelectorAll('.add-col-btn').forEach(b => b.onclick = (e) => addColumn(parseInt(e.target.dataset.colIndex)));
-            container.querySelectorAll('.remove-col-btn').forEach(b => b.onclick = (e) => showConfirmationModal(`Remove column "${chartData.columnLabels[e.target.dataset.colIndex]}"?`, () => removeColumn(parseInt(e.target.dataset.colIndex))));
-            container.querySelectorAll('.add-row-btn').forEach(b => b.onclick = (e) => addRow(parseInt(e.target.dataset.rowIndex)));
-            container.querySelectorAll('.remove-row-btn').forEach(b => b.onclick = (e) => showConfirmationModal(`Remove row "${chartData.rowLabels[e.target.dataset.rowIndex]}"?`, () => removeRow(parseInt(e.target.dataset.rowIndex))));
+            container.querySelectorAll('.add-col-btn').forEach(b => b.onclick = (e) => addColumn(parseInt(e.currentTarget.dataset.colIndex)));
+            container.querySelectorAll('.remove-col-btn').forEach(b => b.onclick = (e) => showConfirmationModal(`Remove column "${chartData.columnLabels[e.currentTarget.dataset.colIndex]}"?`, () => removeColumn(parseInt(e.currentTarget.dataset.colIndex))));
+            container.querySelectorAll('.add-row-btn').forEach(b => b.onclick = (e) => addRow(parseInt(e.currentTarget.dataset.rowIndex)));
+            container.querySelectorAll('.remove-row-btn').forEach(b => b.onclick = (e) => showConfirmationModal(`Remove row "${chartData.rowLabels[e.currentTarget.dataset.rowIndex]}"?`, () => removeRow(parseInt(e.currentTarget.dataset.rowIndex))));
+            container.querySelectorAll('.move-col-left-btn').forEach(b => b.onclick = (e) => moveColumn(parseInt(e.currentTarget.dataset.colIndex), parseInt(e.currentTarget.dataset.colIndex) - 1));
+            container.querySelectorAll('.move-col-right-btn').forEach(b => b.onclick = (e) => moveColumn(parseInt(e.currentTarget.dataset.colIndex), parseInt(e.currentTarget.dataset.colIndex) + 1));
+            container.querySelectorAll('.move-row-up-btn').forEach(b => b.onclick = (e) => moveRow(parseInt(e.currentTarget.dataset.rowIndex), parseInt(e.currentTarget.dataset.rowIndex) - 1));
+            container.querySelectorAll('.move-row-down-btn').forEach(b => b.onclick = (e) => moveRow(parseInt(e.currentTarget.dataset.rowIndex), parseInt(e.currentTarget.dataset.rowIndex) + 1));
         }
 
-        /**
-         * Initializes all configuration inputs with current chartConfig values.
-         */
         function initializeConfigInputs() {
             const configMap = {
                 'chart-title': 'chartTitle', 'background-color': 'backgroundColor', 'border-color': 'borderColor',
-                'font-family': 'fontFamily', 'font-size': 'fontSize', 'font-color': 'fontColor',
+                'font-family': 'fontFamily', 'font-size': 'fontSize', 'font-color': 'fontColor', 'legend-font-size': 'legendFontSize',
                 'label-precision': 'labelPrecision', 'y-axis-ticks': 'yAxisTicks', 'legend-placement': 'legendPlacement',
                 'show-data-labels': 'showDataLabels', 'show-gridlines': 'showGridlines', 'show-column-totals': 'showColumnTotals',
                 'abbreviate-totals-checkbox': 'abbreviateTotals', 'show-x-axis-labels-checkbox': 'showXAxisLabels',
@@ -787,55 +895,49 @@ const defaultData = {
 
             Object.entries(configMap).forEach(([id, key]) => {
                 const el = document.getElementById(id);
-                if (el) { // Added null check for safety
+                if (el) {
                     if (el.type === 'checkbox') el.checked = chartConfig[key];
                     else el.value = chartConfig[key];
                 }
             });
 
             const yAxisScaleRadio = document.querySelector(`input[name="y-axis-scale"][value="${chartConfig.yAxisScaleType}"]`);
-            if (yAxisScaleRadio) yAxisScaleRadio.checked = true; // Added null check
+            if (yAxisScaleRadio) yAxisScaleRadio.checked = true;
             
-            // Set the theme preset dropdown
             const themePresetSelect = document.getElementById('theme-preset');
             if (themePresetSelect) {
-                // Find the theme name that matches the current chartConfig colors
                 const currentThemeName = Object.keys(themes).find(themeName => 
                     themes[themeName].backgroundColor === chartConfig.backgroundColor &&
                     themes[themeName].borderColor === chartConfig.borderColor &&
                     themes[themeName].fontColor === chartConfig.fontColor &&
                     JSON.stringify(themes[themeName].segmentColors) === JSON.stringify(chartConfig.segmentColors)
                 );
-                themePresetSelect.value = currentThemeName || 'default'; // Set to found theme or default
+                themePresetSelect.value = currentThemeName || 'default';
             }
 
-            // Set the segment color palette dropdown
             const segmentColorPaletteSelect = document.getElementById('segment-color-palette');
             if (segmentColorPaletteSelect) {
                 const currentPaletteName = Object.keys(palettes).find(paletteName => 
                     JSON.stringify(palettes[paletteName]) === JSON.stringify(chartConfig.segmentColors)
                 );
-                segmentColorPaletteSelect.value = currentPaletteName || 'custom'; // Set to found palette or custom
+                segmentColorPaletteSelect.value = currentPaletteName || 'custom';
             }
 
             const segmentColorsInput = document.getElementById('segment-colors');
-            if (segmentColorsInput) segmentColorsInput.value = chartConfig.segmentColors.join(','); // Added null check
+            if (segmentColorsInput) segmentColorsInput.value = chartConfig.segmentColors.join(',');
         }
 
-        /**
-         * Main function to draw the Mekko chart.
-         */
         function drawMekkoChart() {
             const containerRect = chartContainer.getBoundingClientRect();
             let currentSvgWidth = containerRect.width;
             let currentSvgHeight = containerRect.height;
-            const fs = chartConfig.fontSize;
-
+            
             let chartContentMargin = { ...margin };
             
-            const legendRectSize = 12, legendTextOffset = 17, legendLineHeight = fs * 1.5, legendPadding = 10;
+            const legendFs = chartConfig.legendFontSize;
+            const legendRectSize = 12, legendTextOffset = 17, legendLineHeight = legendFs * 1.5, legendPadding = 10;
             if (chartData.rowLabels.length > 0 && chartConfig.legendPlacement !== 'none') {
-                const estimateTextWidth = text => text.length * (fs * 0.6); 
+                const estimateTextWidth = text => text.length * (legendFs * 0.6); 
                 if (chartConfig.legendPlacement === 'right') {
                     const maxTextWidth = d3.max(chartData.rowLabels, d => estimateTextWidth(d));
                     chartContentMargin.right += legendRectSize + legendTextOffset + maxTextWidth + legendPadding;
@@ -864,7 +966,7 @@ const defaultData = {
             const x = d3.scaleLinear().domain([0, overallTotal]).range([0, width]);
             const y = chartConfig.yAxisScaleType === 'percentage' 
                 ? d3.scaleLinear().domain([0, 1]).range([height, 0])
-                : d3.scaleLinear().domain([0, d3.max(columnTotals) || 1]).range([height, 0]).nice(); // Use .nice() for better scaling
+                : d3.scaleLinear().domain([0, d3.max(columnTotals) || 1]).range([height, 0]).nice();
 
             const color = d3.scaleOrdinal(chartConfig.segmentColors).domain(chartData.rowLabels);
 
@@ -896,7 +998,6 @@ const defaultData = {
                 return columnData;
             });
 
-            // Draw segments with tooltips
             g.selectAll('.column-group').data(chartDataProcessed).enter().append('g')
                 .each(function(d) {
                     d3.select(this).selectAll('rect').data(d.segments).enter().append('rect')
@@ -913,12 +1014,11 @@ const defaultData = {
                     if(chartConfig.showDataLabels) {
                         d3.select(this).selectAll('.segment-label').data(d.segments).enter().append('text')
                             .attr('class', 'segment-label').attr('x', s => s.x + s.width/2).attr('y', s => s.y + s.height/2).attr('dy', '0.35em')
-                            .attr('font-family', chartConfig.fontFamily).attr('font-size', `${fs * 0.9}px`).attr('fill', s => getContrastingTextColor(s.color))
+                            .attr('font-family', chartConfig.fontFamily).attr('font-size', `${chartConfig.fontSize * 0.9}px`).attr('fill', s => getContrastingTextColor(s.color))
                             .text(s => (s.width > 20 && s.height > 15 && s.displayValue !== 0) ? `${s.displayValue.toFixed(chartConfig.labelPrecision)}${chartConfig.yAxisScaleType === 'percentage' ? '%' : ''}`: '');
                     }
                 });
             
-            // X-Axis Labels with force simulation
             if (chartConfig.showXAxisLabels) {
                 const labelNodes = chartDataProcessed.map((d, i) => {
                     let totalStr = chartConfig.showColumnTotals ? ` (${chartConfig.abbreviateTotals ? d3.format(".2s")(d.total).replace(/G/,'B') : d.total.toLocaleString()})` : '';
@@ -926,89 +1026,98 @@ const defaultData = {
                 });
 
                 const simulation = d3.forceSimulation(labelNodes)
-                    .force("collide", d3.forceCollide(d => d.text.length * fs * 0.3 + 10))
+                    .force("collide", d3.forceCollide(d => d.text.length * chartConfig.fontSize * 0.3 + 10))
                     .force("x", d3.forceX(d => d.fx).strength(1))
                     .stop();
                 for (let i = 0; i < 150; ++i) simulation.tick();
 
                 labelNodes.forEach((node, i) => {
-                    node.y = height + fs * (i % 2 === 0 ? 2.5 : 4.5);
+                    node.y = height + chartConfig.fontSize * (i % 2 === 0 ? 2.5 : 4.5);
                 });
 
                 const labelGroup = g.append('g').attr('class', 'x-axis-labels');
                 labelGroup.selectAll('.leader-line').data(labelNodes).enter().append('line')
-                    .attr('class', 'leader-line').attr('x1', d => d.sourceX).attr('y1', height).attr('x2', d => d.x).attr('y2', d => d.y - fs * 0.7).attr('stroke', chartConfig.fontColor);
+                    .attr('class', 'leader-line').attr('x1', d => d.sourceX).attr('y1', height).attr('x2', d => d.x).attr('y2', d => d.y - chartConfig.fontSize * 0.7).attr('stroke', chartConfig.fontColor);
                 labelGroup.selectAll('.column-label').data(labelNodes).enter().append('text')
-                    .attr('class', 'column-label').attr('x', d => d.x).attr('y', d => d.y).attr('font-family', chartConfig.fontFamily).attr('font-size', `${fs}px`).attr('fill', chartConfig.fontColor).text(d => d.text);
+                    .attr('class', 'column-label').attr('x', d => d.x).attr('y', d => d.y).attr('font-family', chartConfig.fontFamily).attr('font-size', `${chartConfig.fontSize}px`).attr('fill', chartConfig.fontColor).text(d => d.text);
             }
 
             // Titles
-            chartSvg.append('text').attr('class', 'chart-title').attr('x', chartContentMargin.left + width/2).attr('y', chartContentMargin.top / 2).attr('font-family', chartConfig.fontFamily).attr('font-size', `${fs * 1.8}px`).attr('fill', chartConfig.fontColor).text(chartConfig.chartTitle);
+            chartSvg.append('text').attr('class', 'chart-title').attr('x', chartContentMargin.left + width/2).attr('y', chartContentMargin.top / 2).attr('font-family', chartConfig.fontFamily).attr('font-size', `${chartConfig.chartTitleFontSize}px`).attr('fill', chartConfig.fontColor).text(chartConfig.chartTitle);
             if (chartConfig.showYAxisTitle) {
-                g.append('text').attr('class', 'axis-title').attr('transform', 'rotate(-90)').attr('y', -chartContentMargin.left * 0.75).attr('x', -height/2).attr('font-family', chartConfig.fontFamily).attr('font-size', `${fs*1.2}px`).attr('fill', chartConfig.fontColor).text(document.getElementById('data-title-input').value || 'Value');
+                g.append('text').attr('class', 'axis-title').attr('transform', 'rotate(-90)').attr('y', -chartContentMargin.left * 0.75).attr('x', -height/2).attr('font-family', chartConfig.fontFamily).attr('font-size', `${chartConfig.dataTitleFontSize}px`).attr('fill', chartConfig.fontColor).text(document.getElementById('data-title-input').value || 'Value');
             }
             if (chartConfig.showXAxisTitle) {
-                g.append('text').attr('class', 'axis-title').attr('x', width/2).attr('y', height + chartContentMargin.bottom * 0.9).attr('font-family', chartConfig.fontFamily).attr('font-size', `${fs*1.2}px`).attr('fill', chartConfig.fontColor).text(document.getElementById('column-title-input').value);
+                g.append('text').attr('class', 'axis-title').attr('x', width/2).attr('y', height + chartContentMargin.bottom * 0.9).attr('font-family', chartConfig.fontFamily).attr('font-size', `${chartConfig.columnTitleFontSize}px`).attr('fill', chartConfig.fontColor).text(document.getElementById('column-title-input').value);
             }
 
             // Axes and Grid
             if (chartConfig.showYAxisLabels) {
                 const yAxis = d3.axisLeft(y).ticks(chartConfig.yAxisTicks).tickFormat(d => chartConfig.yAxisScaleType === 'percentage' ? `${d * 100}%` : d3.format(".2s")(d).replace(/G/,'B'));
-                g.append('g').attr('class', 'axis y-axis').call(yAxis).selectAll("text").attr("fill", chartConfig.fontColor).attr("font-family", chartConfig.fontFamily).attr("font-size", `${fs}px`);
+                g.append('g').attr('class', 'axis y-axis').call(yAxis).selectAll("text").attr("fill", chartConfig.fontColor).attr("font-family", chartConfig.fontFamily).attr("font-size", `${chartConfig.fontSize}px`);
             }
             if (chartConfig.showGridlines) {
                 g.append("g").attr("class", "grid y-grid").call(d3.axisLeft(y).ticks(chartConfig.yAxisTicks).tickSize(-width).tickFormat(""));
             }
 
             // Legend
-            const legend = chartSvg.append('g').attr('class', 'legend').attr('font-family', chartConfig.fontFamily).attr('font-size', `${fs * 0.9}px`).attr('fill', chartConfig.fontColor);
-            const legendItems = legend.selectAll('.legend-item').data(chartData.rowLabels).enter().append('g').attr('class', 'legend-item');
-            legendItems.append('rect').attr('width', legendRectSize).attr('height', legendRectSize).attr('fill', d => color(d)).attr('stroke', chartConfig.borderColor);
-            legendItems.append('text').attr('x', legendTextOffset).attr('y', legendRectSize/2).attr('dy', '0.35em').text(d => d);
-            if (chartConfig.legendPlacement === 'right') {
-                legendItems.attr('transform', (d, i) => `translate(${chartContentMargin.left + width + legendPadding}, ${chartContentMargin.top + i * legendLineHeight})`);
-            } else {
-                let xPos = chartContentMargin.left, yPos;
-                if(chartConfig.legendPlacement === 'below') yPos = chartContentMargin.top + height + chartContentMargin.bottom * 0.8;
-                else yPos = chartContentMargin.top - legendCalculatedHeight - legendPadding; // legendCalculatedHeight is not defined here, might be a bug in original code
-                const availableWidth = currentSvgWidth - chartContentMargin.left - chartContentMargin.right;
-                legendItems.attr('transform', function() {
-                    const itemWidth = this.getBBox().width + 20;
-                    if (xPos + itemWidth > chartContentMargin.left + availableWidth) {
-                        xPos = chartContentMargin.left; yPos += legendLineHeight;
-                    }
-                    const transform = `translate(${xPos}, ${yPos})`;
-                    xPos += itemWidth;
-                    return transform;
-                });
+            if (chartConfig.legendPlacement !== 'none') {
+                const legend = chartSvg.append('g').attr('class', 'legend').attr('font-family', chartConfig.fontFamily).attr('fill', chartConfig.fontColor);
+                const legendItems = legend.selectAll('.legend-item').data(chartData.rowLabels).enter().append('g').attr('class', 'legend-item');
+                legendItems.append('rect').attr('width', legendRectSize).attr('height', legendRectSize).attr('fill', d => color(d)).attr('stroke', chartConfig.borderColor);
+                legendItems.append('text').attr('x', legendTextOffset).attr('y', legendRectSize/2).attr('dy', '0.35em').text(d => d).attr('font-size', `${legendFs}px`);
+                
+                if (chartConfig.legendPlacement === 'right') {
+                    legendItems.attr('transform', (d, i) => `translate(${chartContentMargin.left + width + legendPadding}, ${chartContentMargin.top + i * legendLineHeight})`);
+                } else {
+                    let xPos = chartContentMargin.left;
+                    let yPos = (chartConfig.legendPlacement === 'below') 
+                        ? chartContentMargin.top + height + 40 // Adjusted for better spacing
+                        : chartContentMargin.top - (Math.ceil(chartData.rowLabels.length / 5) * legendLineHeight + legendPadding);
+                    
+                    const availableWidth = currentSvgWidth - chartContentMargin.left - chartContentMargin.right;
+                    legendItems.attr('transform', function() {
+                        const itemWidth = this.getBBox().width + 20;
+                        if (xPos + itemWidth > chartContentMargin.left + availableWidth) {
+                            xPos = chartContentMargin.left; yPos += legendLineHeight;
+                        }
+                        const transform = `translate(${xPos}, ${yPos})`;
+                        xPos += itemWidth;
+                        return transform;
+                    });
+                }
             }
         }
 
-        /**
-         * Updates the toggle sidebar button icon based on sidebar visibility.
-         */
         function updateToggleIcon() {
             if (sidebar.classList.contains('hidden')) {
-                toggleIcon.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>`; // Right arrow
+                toggleIcon.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>`;
             } else {
-                toggleIcon.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>`; // Left arrow
+                toggleIcon.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>`;
             }
         }
 
-        /**
-         * Sets up all event listeners for the application.
-         */
         function setupEventListeners() {
             // Sidebar toggle
             document.getElementById('toggle-sidebar-btn').addEventListener('click', () => {
                 sidebar.classList.toggle('hidden');
-                updateToggleIcon(); // Update icon on click
+                updateToggleIcon();
                 setTimeout(drawMekkoChart, 300);
             });
             document.getElementById('close-sidebar-btn').addEventListener('click', () => {
                 sidebar.classList.add('hidden');
-                updateToggleIcon(); // Update icon on close
+                updateToggleIcon();
                 setTimeout(drawMekkoChart, 300);
+            });
+            
+            // Sidebar font size controls
+            document.getElementById('increase-sidebar-font').addEventListener('click', () => {
+                const currentSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-base-font-size'));
+                document.documentElement.style.setProperty('--sidebar-base-font-size', `${Math.min(20, currentSize + 1)}px`);
+            });
+            document.getElementById('decrease-sidebar-font').addEventListener('click', () => {
+                const currentSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-base-font-size'));
+                document.documentElement.style.setProperty('--sidebar-base-font-size', `${Math.max(10, currentSize - 1)}px`);
             });
 
             // Sidebar resize
@@ -1050,6 +1159,21 @@ const defaultData = {
                 reader.readAsText(file);
                 e.target.value = '';
             });
+            
+            document.getElementById('delete-all-data-btn').addEventListener('click', () => {
+                showConfirmationModal('Are you sure you want to delete all data? This cannot be undone.', () => {
+                    chartData = {
+                        columnLabels: ['Category 1'],
+                        rowLabels: ['Segment 1'],
+                        values: [[0]]
+                    };
+                    renderDataGrid('sidebar-grid-container');
+                    if (dataGridModal.classList.contains('visible')) {
+                        renderDataGrid('modal-grid-container');
+                    }
+                    drawMekkoChart();
+                });
+            });
 
             // Export
             document.getElementById('export-png-btn').addEventListener('click', () => {
@@ -1088,7 +1212,7 @@ const defaultData = {
 
                 const configMap = {
                     'chart-title': 'chartTitle', 'background-color': 'backgroundColor', 'border-color': 'borderColor',
-                    'font-family': 'fontFamily', 'font-size': 'fontSize', 'font-color': 'fontColor',
+                    'font-family': 'fontFamily', 'font-color': 'fontColor', 'legend-font-size': 'legendFontSize',
                     'label-precision': 'labelPrecision', 'y-axis-ticks': 'yAxisTicks', 'legend-placement': 'legendPlacement',
                     'show-data-labels': 'showDataLabels', 'show-gridlines': 'showGridlines', 'show-column-totals': 'showColumnTotals',
                     'abbreviate-totals-checkbox': 'abbreviateTotals', 'show-x-axis-labels-checkbox': 'showXAxisLabels',
@@ -1098,9 +1222,19 @@ const defaultData = {
                 
                 if (configMap[targetId]) {
                     chartConfig[configMap[targetId]] = (configMap[targetId] === 'segmentColors') ? targetValue.split(',').map(c=>c.trim()) : targetValue;
+                } else if (targetId === 'font-size') {
+                    // Main font size acts as an override
+                    const newSize = parseInt(targetValue);
+                    chartConfig.fontSize = newSize;
+                    chartConfig.legendFontSize = newSize;
+                    chartConfig.chartTitleFontSize = Math.round(newSize * 1.8);
+                    chartConfig.rowTitleFontSize = Math.round(newSize * 1.2);
+                    chartConfig.columnTitleFontSize = Math.round(newSize * 1.2);
+                    chartConfig.dataTitleFontSize = Math.round(newSize * 1.2);
+                    initializeConfigInputs(); // Refresh inputs to show new values
                 } else if (targetId === 'theme-preset') {
                     Object.assign(chartConfig, themes[targetValue]);
-                    initializeConfigInputs(); // Re-initialize all inputs to reflect theme changes
+                    initializeConfigInputs();
                 } else if (targetId === 'segment-color-palette') {
                     if (targetValue !== 'custom') {
                         chartConfig.segmentColors = palettes[targetValue];
@@ -1109,6 +1243,18 @@ const defaultData = {
                 } else if (e.target.name === 'y-axis-scale') {
                     chartConfig.yAxisScaleType = targetValue;
                 }
+                drawMekkoChart();
+            });
+            
+            // Individual font size control buttons
+            sidebar.addEventListener('click', (e) => {
+                const button = e.target.closest('.font-size-control-btn');
+                if (!button) return;
+                
+                const target = button.dataset.target;
+                const step = parseInt(button.dataset.step);
+                
+                chartConfig[target] = (chartConfig[target] || 12) + step;
                 drawMekkoChart();
             });
 
@@ -1123,20 +1269,18 @@ const defaultData = {
             });
             document.getElementById('data-grid-modal-close-btn').addEventListener('click', () => {
                 hideModal(dataGridModal);
-                renderDataGrid('sidebar-grid-container'); // Refresh sidebar grid
+                renderDataGrid('sidebar-grid-container');
             });
         }
 
         // --- Initial Setup ---
         window.onload = () => {
-            // Collapse all accordion details
             document.querySelectorAll('.sidebar-accordion details').forEach(detail => {
                 detail.removeAttribute('open');
             });
 
-            // Set sidebar to hidden/minimized state
             sidebar.classList.add('hidden');
-            updateToggleIcon(); // Set the initial toggle icon based on hidden state
+            updateToggleIcon();
 
             renderDataGrid('sidebar-grid-container');
             initializeConfigInputs();
