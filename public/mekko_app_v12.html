@@ -46,6 +46,87 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
 
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, collection, query, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Firebase variables
+        window.firebaseApp = null;
+        window.db = null;
+        window.auth = null;
+        window.currentUserId = null;
+
+        // Initialize Firebase
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+        if (Object.keys(firebaseConfig).length > 0) {
+            window.firebaseApp = initializeApp(firebaseConfig);
+            window.db = getFirestore(window.firebaseApp);
+            window.auth = getAuth(window.firebaseApp);
+
+            // Listen for auth state changes
+            onAuthStateChanged(window.auth, async (user) => {
+                if (user) {
+                    window.currentUserId = user.uid;
+                    console.log("User signed in:", user.uid);
+                } else {
+                    // User is signed out, or no user is signed in.
+                    // If __initial_auth_token is not defined, sign in anonymously.
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        try {
+                            await signInWithCustomToken(window.auth, __initial_auth_token);
+                            console.log("Signed in with custom token.");
+                        } catch (error) {
+                            console.error("Error signing in with custom token:", error);
+                            await signInAnonymously(window.auth);
+                            console.log("Signed in anonymously due to custom token error.");
+                        }
+                    } else {
+                        await signInAnonymously(window.auth);
+                        console.log("Signed in anonymously.");
+                    }
+                    window.currentUserId = window.auth.currentUser?.uid || crypto.randomUUID(); // Fallback if anonymous fails or not yet set
+                }
+                document.getElementById('user-id-display').textContent = `User ID: ${window.currentUserId}`;
+                // Re-enable online save/load buttons after auth state is known
+                document.getElementById('save-chart-online-btn').disabled = false;
+                document.getElementById('load-chart-online-btn').disabled = false;
+            });
+
+            // Expose signOut function globally for the button
+            window.signOutUser = async () => {
+                try {
+                    await signOut(window.auth);
+                    console.log("User signed out.");
+                    window.currentUserId = null; // Clear user ID
+                    document.getElementById('user-id-display').textContent = `User ID: Not signed in`;
+                    // Optionally, sign in anonymously again after explicit sign out
+                    await signInAnonymously(window.auth);
+                } catch (error) {
+                    console.error("Error signing out:", error);
+                }
+            };
+
+            // Expose Firestore functions globally for main script
+            window.firebase = {
+                db: window.db,
+                auth: window.auth,
+                currentUserId: () => window.currentUserId,
+                collection, doc, addDoc, getDocs, deleteDoc,
+                appId: appId // Expose appId
+            };
+        } else {
+            console.warn("Firebase config not found. Online save/load will not be available.");
+            document.getElementById('user-id-display').textContent = `User ID: Offline Mode`;
+            // Disable online buttons if Firebase is not configured
+            document.getElementById('save-chart-online-btn').disabled = true;
+            document.getElementById('load-chart-online-btn').disabled = true;
+        }
+    </script>
+
     <style>
         :root {
             --sidebar-base-font-size: 14px;
@@ -312,6 +393,28 @@
         #app-footer a:hover { text-decoration: underline; }
         #info-icon, #feedback-icon { cursor: pointer; color: #9ca3af; }
         #info-icon:hover, #feedback-icon:hover { color: #4b5563; }
+        #user-id-display {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-left: 1rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 150px; /* Adjust as needed */
+        }
+        #sign-out-btn {
+            background-color: #ef4444;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #sign-out-btn:hover {
+            background-color: #dc2626;
+        }
+
 
         .modal-overlay {
             position: fixed;
@@ -359,22 +462,87 @@
         #about-modal a { color: #3b82f6; }
         #about-modal .terms { font-size: 0.75rem; max-height: 100px; overflow-y: auto; border: 1px solid #e5e7eb; padding: 0.5rem; border-radius: 0.25rem; margin-top: 0.5rem; }
         
-        #confirmation-modal, #feedback-modal { z-index: 110; }
-        #data-grid-modal { z-index: 105; }
+        #confirmation-modal, #feedback-modal, #save-chart-modal { z-index: 110; }
+        #data-grid-modal, #load-chart-modal { z-index: 105; }
 
-        #data-grid-modal .modal-content, #feedback-modal .modal-content {
+        #data-grid-modal .modal-content, #feedback-modal .modal-content, #load-chart-modal .modal-content {
             width: 95vw;
             height: 90vh;
             max-width: none;
             display: flex;
             flex-direction: column;
         }
-        #modal-grid-container, #feedback-iframe {
+        #modal-grid-container, #feedback-iframe, #saved-charts-list {
             flex-grow: 1;
             overflow: auto;
             border: 1px solid #e2e8f0;
             border-radius: 0.25rem;
+            padding: 0.5rem;
         }
+        #saved-charts-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        #saved-charts-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            border-bottom: 1px solid #e2e8f0;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #saved-charts-list li:hover {
+            background-color: #f1f5f9;
+        }
+        #saved-charts-list li:last-child {
+            border-bottom: none;
+        }
+        #saved-charts-list .chart-info {
+            flex-grow: 1;
+            text-align: left;
+        }
+        #saved-charts-list .chart-name {
+            font-weight: 600;
+            color: #1e293b;
+        }
+        #saved-charts-list .chart-date {
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+        #saved-charts-list .chart-actions button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #ef4444;
+            margin-left: 0.5rem;
+            padding: 0.25rem;
+            border-radius: 0.25rem;
+        }
+        #saved-charts-list .chart-actions button:hover {
+            background-color: #fee2e2;
+        }
+        #chart-name-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.375rem;
+            margin-top: 0.5rem;
+        }
+        #loading-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            z-index: 120;
+            display: none; /* Hidden by default */
+        }
+
 
         #tooltip {
             position: absolute;
@@ -417,9 +585,13 @@
                     <summary>Data & Export <span class="accordion-icon">&gt;</span></summary>
                     <div class="accordion-content space-y-3 pt-4">
                         <div class="flex items-center space-x-2">
-                            <button id="save-data-btn" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600">Save Data</button>
+                            <button id="save-data-btn" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600">Save Data (Local)</button>
                             <input type="file" id="load-data-input" class="hidden" accept=".json">
-                            <label for="load-data-input" class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 cursor-pointer text-center">Load Data</label>
+                            <label for="load-data-input" class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 cursor-pointer text-center">Load Data (Local)</label>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button id="save-chart-online-btn" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-500 rounded-md hover:bg-indigo-600" disabled>Save Chart (Online)</button>
+                            <button id="load-chart-online-btn" class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300" disabled>Load Chart (Online)</button>
                         </div>
                         <div class="flex items-center space-x-2">
                             <button id="export-png-btn" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-md hover:bg-green-600">Export as PNG</button>
@@ -622,6 +794,8 @@
     
     <footer id="app-footer">
         <a href="https://mekkochart.vercel.app/" target="_blank">Quick Mekko Chart &copy; 2025 AV</a>
+        <span id="user-id-display">User ID: Loading...</span>
+        <button id="sign-out-btn" onclick="window.signOutUser()">Sign Out</button>
         <span id="feedback-icon" title="Submit Feedback">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 12H5v-2h14v2zm0-3H5V9h14v2zm0-3H5V6h14v2z"/>
@@ -633,6 +807,7 @@
     </footer>
 
     <div id="tooltip"></div>
+    <div id="loading-indicator">Loading...</div>
 
     <!-- Confirmation Modal -->
     <div id="confirmation-modal" class="modal-overlay">
@@ -686,6 +861,35 @@
             <h3 class="text-left">Data Grid</h3>
             <div id="modal-grid-container" class="data-grid-container">
             </div>
+        </div>
+    </div>
+
+    <!-- Save Chart Modal -->
+    <div id="save-chart-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close-btn" id="save-chart-modal-close-btn">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <h3>Save Chart Online</h3>
+            <label for="chart-name-input" class="sidebar-label text-left block">Chart Name:</label>
+            <input type="text" id="chart-name-input" placeholder="Enter chart name" class="sidebar-input">
+            <div class="modal-buttons">
+                <button id="save-chart-confirm-btn" class="modal-button confirm">Save</button>
+                <button id="save-chart-cancel-btn" class="modal-button cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Chart Modal -->
+    <div id="load-chart-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close-btn" id="load-chart-modal-close-btn">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <h3 class="text-left">Your Saved Charts</h3>
+            <ul id="saved-charts-list">
+                <!-- Saved charts will be loaded here -->
+            </ul>
         </div>
     </div>
 
@@ -765,15 +969,30 @@
         const aboutModal = document.getElementById('about-modal');
         const dataGridModal = document.getElementById('data-grid-modal');
         const feedbackModal = document.getElementById('feedback-modal');
+        const saveChartModal = document.getElementById('save-chart-modal');
+        const loadChartModal = document.getElementById('load-chart-modal');
+        const loadingIndicator = document.getElementById('loading-indicator');
+
         let modalOnConfirmCallback = null;
 
         function showModal(modalEl) { modalEl.classList.add('visible'); }
         function hideModal(modalEl) { modalEl.classList.remove('visible'); }
         
-        function showConfirmationModal(message, onConfirm) {
+        function showConfirmationModal(message, onConfirm, isAlert = false) {
             document.getElementById('modal-message').textContent = message;
             modalOnConfirmCallback = onConfirm;
+            document.getElementById('modal-yes-btn').style.display = isAlert ? 'none' : 'inline-block';
+            document.getElementById('modal-no-btn').textContent = isAlert ? 'OK' : 'No';
             showModal(confirmationModal);
+        }
+
+        function showLoading(message = "Loading...") {
+            loadingIndicator.textContent = message;
+            loadingIndicator.style.display = 'block';
+        }
+
+        function hideLoading() {
+            loadingIndicator.style.display = 'none';
         }
 
         function getContrastingTextColor(color) {
@@ -967,6 +1186,11 @@
 
             const segmentColorsInput = document.getElementById('segment-colors');
             if (segmentColorsInput) segmentColorsInput.value = chartConfig.segmentColors.join(',');
+
+            // Update data titles from chartData
+            document.getElementById('row-title-input').value = document.getElementById('row-title-input').value || defaultData.rowLabels[0];
+            document.getElementById('column-title-input').value = document.getElementById('column-title-input').value || defaultData.columnLabels[0];
+            document.getElementById('data-title-input').value = document.getElementById('data-title-input').value || "Share %";
         }
 
         function drawMekkoChart() {
@@ -1266,6 +1490,164 @@
             }
         }
 
+        async function saveChartOnline() {
+            if (!window.firebase || !window.firebase.currentUserId()) {
+                showConfirmationModal("You need to be signed in to save charts online.", () => {}, true);
+                return;
+            }
+
+            showModal(saveChartModal);
+            document.getElementById('chart-name-input').value = chartConfig.chartTitle; // Pre-fill with current chart title
+            document.getElementById('chart-name-input').focus();
+        }
+
+        async function confirmSaveChartOnline() {
+            hideModal(saveChartModal);
+            showLoading("Saving chart...");
+
+            const chartName = document.getElementById('chart-name-input').value.trim();
+            if (!chartName) {
+                showConfirmationModal("Chart name cannot be empty.", () => {}, true);
+                hideLoading();
+                return;
+            }
+
+            const dataToSave = {
+                name: chartName,
+                chartData: JSON.parse(JSON.stringify(chartData)),
+                chartConfig: JSON.parse(JSON.stringify(chartConfig)),
+                dataTitles: {
+                    row: document.getElementById('row-title-input').value,
+                    column: document.getElementById('column-title-input').value,
+                    data: document.getElementById('data-title-input').value
+                },
+                timestamp: new Date().toISOString()
+            };
+
+            try {
+                const chartsCollectionRef = window.firebase.collection(window.firebase.db, `artifacts/${window.firebase.appId}/users/${window.firebase.currentUserId()}/charts`);
+                await window.firebase.addDoc(chartsCollectionRef, dataToSave);
+                showConfirmationModal("Chart saved successfully!", () => {}, true);
+            } catch (e) {
+                console.error("Error saving document: ", e);
+                showConfirmationModal("Error saving chart: " + e.message, () => {}, true);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function loadChartsOnline() {
+            if (!window.firebase || !window.firebase.currentUserId()) {
+                showConfirmationModal("You need to be signed in to load charts online.", () => {}, true);
+                return;
+            }
+
+            showLoading("Loading charts...");
+            const savedChartsList = document.getElementById('saved-charts-list');
+            savedChartsList.innerHTML = ''; // Clear previous list
+
+            try {
+                const chartsCollectionRef = window.firebase.collection(window.firebase.db, `artifacts/${window.firebase.appId}/users/${window.firebase.currentUserId()}/charts`);
+                const querySnapshot = await window.firebase.getDocs(chartsCollectionRef);
+                
+                if (querySnapshot.empty) {
+                    savedChartsList.innerHTML = '<li class="text-center text-gray-500">No charts saved yet.</li>';
+                } else {
+                    querySnapshot.forEach((doc) => {
+                        const chart = doc.data();
+                        const li = document.createElement('li');
+                        li.dataset.chartId = doc.id;
+                        li.innerHTML = `
+                            <div class="chart-info">
+                                <div class="chart-name">${chart.name}</div>
+                                <div class="chart-date">${new Date(chart.timestamp).toLocaleString()}</div>
+                            </div>
+                            <div class="chart-actions">
+                                <button class="load-single-chart-btn" title="Load Chart">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.94 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 16c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+                                </button>
+                                <button class="delete-single-chart-btn" title="Delete Chart">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                                </button>
+                            </div>
+                        `;
+                        savedChartsList.appendChild(li);
+                    });
+
+                    savedChartsList.querySelectorAll('.load-single-chart-btn').forEach(button => {
+                        button.onclick = (event) => {
+                            event.stopPropagation(); // Prevent li click
+                            const chartId = event.currentTarget.closest('li').dataset.chartId;
+                            loadSingleChart(chartId);
+                        };
+                    });
+                    savedChartsList.querySelectorAll('.delete-single-chart-btn').forEach(button => {
+                        button.onclick = (event) => {
+                            event.stopPropagation(); // Prevent li click
+                            const chartId = event.currentTarget.closest('li').dataset.chartId;
+                            const chartName = event.currentTarget.closest('li').querySelector('.chart-name').textContent;
+                            showConfirmationModal(`Are you sure you want to delete "${chartName}"?`, () => deleteSingleChart(chartId));
+                        };
+                    });
+                }
+                showModal(loadChartModal);
+            } catch (e) {
+                console.error("Error loading documents: ", e);
+                showConfirmationModal("Error loading charts: " + e.message, () => {}, true);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function loadSingleChart(chartId) {
+            hideModal(loadChartModal);
+            showLoading("Loading selected chart...");
+
+            try {
+                const chartDocRef = window.firebase.doc(window.firebase.db, `artifacts/${window.firebase.appId}/users/${window.firebase.currentUserId()}/charts`, chartId);
+                const docSnap = await window.firebase.getDoc(chartDocRef);
+
+                if (docSnap.exists()) {
+                    const chartDataLoaded = docSnap.data();
+                    chartData = chartDataLoaded.chartData;
+                    chartConfig = chartDataLoaded.chartConfig;
+                    document.getElementById('row-title-input').value = chartDataLoaded.dataTitles.row;
+                    document.getElementById('column-title-input').value = chartDataLoaded.dataTitles.column;
+                    document.getElementById('data-title-input').value = chartDataLoaded.dataTitles.data;
+
+                    renderDataGrid('sidebar-grid-container');
+                    initializeConfigInputs();
+                    drawMekkoChart();
+                    showConfirmationModal(`Chart "${chartDataLoaded.name}" loaded successfully!`, () => {}, true);
+                } else {
+                    showConfirmationModal("Chart not found.", () => {}, true);
+                }
+            } catch (e) {
+                console.error("Error loading chart: ", e);
+                showConfirmationModal("Error loading chart: " + e.message, () => {}, true);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function deleteSingleChart(chartId) {
+            hideModal(confirmationModal); // Hide confirmation modal first
+            showLoading("Deleting chart...");
+
+            try {
+                const chartDocRef = window.firebase.doc(window.firebase.db, `artifacts/${window.firebase.appId}/users/${window.firebase.currentUserId()}/charts`, chartId);
+                await window.firebase.deleteDoc(chartDocRef);
+                showConfirmationModal("Chart deleted successfully!", () => {}, true);
+                loadChartsOnline(); // Refresh the list
+            } catch (e) {
+                console.error("Error deleting chart: ", e);
+                showConfirmationModal("Error deleting chart: " + e.message, () => {}, true);
+            } finally {
+                hideLoading();
+            }
+        }
+
+
         function setupEventListeners() {
             document.getElementById('toggle-sidebar-btn').addEventListener('click', () => {
                 sidebar.classList.toggle('hidden');
@@ -1296,6 +1678,7 @@
             });
             document.addEventListener('mouseup', () => { isResizing = false; document.body.style.cursor = ''; });
 
+            // Local Save/Load
             document.getElementById('save-data-btn').addEventListener('click', () => {
                 const state = { chartData, chartConfig, dataTitles: { row: document.getElementById('row-title-input').value, column: document.getElementById('column-title-input').value, data: document.getElementById('data-title-input').value } };
                 const blob = new Blob([JSON.stringify(state, null, 2)], {type: "application/json"});
@@ -1318,13 +1701,22 @@
                             document.getElementById('column-title-input').value = state.dataTitles.column;
                             document.getElementById('data-title-input').value = state.dataTitles.data;
                             renderDataGrid('sidebar-grid-container'); initializeConfigInputs(); drawMekkoChart();
-                        } else { showConfirmationModal('Invalid data file format.', () => {}); }
-                    } catch (error) { showConfirmationModal('Error reading the data file.', () => {}); }
+                        } else { showConfirmationModal('Invalid data file format.', () => {}, true); }
+                    } catch (error) { showConfirmationModal('Error reading the data file.', () => {}, true); }
                 };
                 reader.readAsText(file);
                 e.target.value = '';
             });
             
+            // Online Save/Load
+            document.getElementById('save-chart-online-btn').addEventListener('click', saveChartOnline);
+            document.getElementById('load-chart-online-btn').addEventListener('click', loadChartsOnline);
+            document.getElementById('save-chart-confirm-btn').addEventListener('click', confirmSaveChartOnline);
+            document.getElementById('save-chart-cancel-btn').addEventListener('click', () => hideModal(saveChartModal));
+            document.getElementById('save-chart-modal-close-btn').addEventListener('click', () => hideModal(saveChartModal));
+            document.getElementById('load-chart-modal-close-btn').addEventListener('click', () => hideModal(loadChartModal));
+
+
             document.getElementById('delete-all-data-btn').addEventListener('click', () => {
                 showConfirmationModal('Are you sure you want to delete all data? This cannot be undone.', () => {
                     chartData = {
