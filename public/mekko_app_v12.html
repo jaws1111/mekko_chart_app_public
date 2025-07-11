@@ -7,7 +7,7 @@
     <meta name="description" content="Generate Mekko charts quickly with free tool at mekkochart.vercel.app. Customize colors, formatting, and sizes for data visualizations.">
     <meta name="keywords" content="Mekko chart, chart generator, data visualization, custom charts, free chart tool">
     <meta name="author" content="Andrius Varanavicius">
-    <meta name="application-version" content="0.13.2">
+    <meta name="application-version" content="0.14.4">
     <meta name="robots" content="index, follow">
     <meta property="og:title" content="Mekko Chart Generator - Create Custom Charts">
     <meta property="og:description" content="Easily create and customize Mekko charts with our free online tool at mekkochart.vercel.app. Perfect for data visualization.">
@@ -29,7 +29,7 @@
       "description": "A free online tool to create and customize Mekko charts for data visualization.",
       "applicationCategory": "Data Visualization Tool",
       "operatingSystem": "Web",
-      "softwareVersion": "0.13.2",
+      "softwareVersion": "0.14.4",
       "url": "https://mekkochart.vercel.app/",
       "offers": {
         "@type": "Offer",
@@ -47,7 +47,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
 
     <style>
-        /* Custom styles for smooth transitions and specific elements */
         :root {
             --sidebar-base-font-size: 14px;
         }
@@ -136,9 +135,8 @@
             color: #1e293b;
         }
 
-        /* Styling for the data input grid */
         .data-grid-container {
-            overflow: auto; /* Changed to auto for better scrollbar handling */
+            overflow: auto;
             margin-top: 0.75rem;
         }
 
@@ -152,7 +150,7 @@
             border: 1px solid #e2e8f0;
             padding: 0;
             text-align: center;
-            min-width: 80px; /* Ensure columns have a minimum width */
+            min-width: 80px;
         }
 
         .data-grid th {
@@ -169,7 +167,7 @@
             border: none;
             border-radius: 0;
             text-align: center;
-            background-color: transparent; /* Allow cell color to show through */
+            background-color: transparent;
             font-family: 'Inter', sans-serif;
             font-size: inherit;
         }
@@ -228,8 +226,24 @@
         .chart-title { font-weight: 700; text-anchor: middle; }
         .axis-title { font-weight: 600; text-anchor: middle; }
         .legend-item { cursor: pointer; }
-
-        /* Sidebar Accordion Styles */
+        
+        .horizontal-drag-handle {
+            cursor: ew-resize;
+            fill: rgba(0,0,0,0.05);
+            transition: fill 0.2s;
+        }
+        .horizontal-drag-handle:hover {
+            fill: rgba(0,0,0,0.2);
+        }
+        .vertical-drag-handle {
+            cursor: ns-resize;
+            fill: rgba(0,0,0,0.05);
+            transition: fill 0.2s;
+        }
+        .vertical-drag-handle:hover {
+            fill: rgba(0,0,0,0.2);
+        }
+        
         .sidebar-accordion details {
             border: 1px solid #e2e8f0;
             border-radius: 0.5rem;
@@ -272,7 +286,6 @@
             gap: 2px;
         }
 
-        /* Responsive adjustments */
         @media (max-width: 768px) {
             #sidebar { position: absolute; height: 100%; left: 0; top: 0; --sidebar-width: 100vw; }
             #sidebar.hidden { transform: translateX(-100%); }
@@ -282,7 +295,6 @@
             #sidebar-resizer { display: none; }
         }
 
-        /* Footer Styles */
         #app-footer {
             flex-shrink: 0;
             padding: 0.5rem 1rem;
@@ -298,10 +310,9 @@
         }
         #app-footer a { color: #3b82f6; text-decoration: none; font-weight: 500; }
         #app-footer a:hover { text-decoration: underline; }
-        #info-icon { cursor: pointer; color: #9ca3af; }
-        #info-icon:hover { color: #4b5563; }
+        #info-icon, #feedback-icon { cursor: pointer; color: #9ca3af; }
+        #info-icon:hover, #feedback-icon:hover { color: #4b5563; }
 
-        /* Modal Styles */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -348,16 +359,17 @@
         #about-modal a { color: #3b82f6; }
         #about-modal .terms { font-size: 0.75rem; max-height: 100px; overflow-y: auto; border: 1px solid #e5e7eb; padding: 0.5rem; border-radius: 0.25rem; margin-top: 0.5rem; }
         
-        #confirmation-modal { z-index: 110; }
+        #confirmation-modal, #feedback-modal { z-index: 110; }
+        #data-grid-modal { z-index: 105; }
 
-        #data-grid-modal .modal-content {
+        #data-grid-modal .modal-content, #feedback-modal .modal-content {
             width: 95vw;
             height: 90vh;
             max-width: none;
             display: flex;
             flex-direction: column;
         }
-        #modal-grid-container {
+        #modal-grid-container, #feedback-iframe {
             flex-grow: 1;
             overflow: auto;
             border: 1px solid #e2e8f0;
@@ -377,6 +389,11 @@
             z-index: 30;
         }
         #tooltip.visible { opacity: 1; }
+
+        #visual-edit-toggle.active {
+            background-color: #3b82f6;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -416,6 +433,9 @@
                     <summary class="flex items-center justify-between">
                         <span>Data Input</span>
                         <div class="flex items-center gap-2">
+                            <button id="visual-edit-toggle" title="Toggle Visual Data Editing" class="p-1 hover:bg-gray-200 rounded-full">
+                                <svg class="w-5 h-5 text-gray-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
+                            </button>
                             <button id="delete-all-data-btn" title="Delete All Data" class="p-1 hover:bg-gray-200 rounded-full">
                                 <svg class="w-5 h-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
                             </button>
@@ -601,7 +621,12 @@
     </div>
     
     <footer id="app-footer">
-	<a href="https://mekkochart.vercel.app/" target="_blank">Quick Mekko Chart &copy; 2025 AV</a>
+        <a href="https://mekkochart.vercel.app/" target="_blank">Quick Mekko Chart &copy; 2025 AV</a>
+        <span id="feedback-icon" title="Submit Feedback">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 12H5v-2h14v2zm0-3H5V9h14v2zm0-3H5V6h14v2z"/>
+            </svg>
+        </span>
         <span id="info-icon" title="About this App">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
         </span>
@@ -634,6 +659,17 @@
             <p>This application is provided "as is", without warranty of any kind. By using this app, you agree to not hold the author liable for any damages or issues arising from its use.</p>
         </div>
     </div>
+    
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="modal-overlay">
+        <div class="modal-content">
+             <button class="modal-close-btn" id="feedback-modal-close-btn">
+                 <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <h3 class="text-left">Feedback Wall</h3>
+            <iframe id="feedback-iframe" src="https://tally.so/embed/w7g11K?alignLeft=1&hideTitle=1&transparentBackground=1&dynamicHeight=1" frameborder="0" marginheight="0" marginwidth="0" title="Feedback Wall"></iframe>
+        </div>
+    </div>
 
     <!-- Fullscreen Data Grid Modal -->
     <div id="data-grid-modal" class="modal-overlay">
@@ -652,6 +688,7 @@
         // Global variables
         const margin = { top: 60, right: 40, bottom: 100, left: 80 };
         let width, height;
+        let isVisualEditMode = false;
 
         const defaultData = {
           columnLabels: ['China', 'United States', 'European Union', 'India', 'Japan'],
@@ -674,8 +711,8 @@
             fontFamily: 'Lato, sans-serif', 
             fontSize: 12,
             fontColor: '#475569',
-            legendFontSize: 12, // New: separate legend font size
-            chartTitleFontSize: 22, // New: individual title font sizes
+            legendFontSize: 12,
+            chartTitleFontSize: 22,
             rowTitleFontSize: 14,
             columnTitleFontSize: 14,
             dataTitleFontSize: 14,
@@ -712,17 +749,16 @@
         let chartData = JSON.parse(JSON.stringify(defaultData));
         let chartConfig = JSON.parse(JSON.stringify(defaultChartConfig));
         
-        // DOM Elements
         const sidebar = document.getElementById('sidebar');
         const chartContainer = document.getElementById('chart-container');
         const chartSvg = d3.select('#mekko-chart');
         const tooltip = d3.select('#tooltip');
         const toggleIcon = document.getElementById('toggle-icon');
         
-        // Modal elements
         const confirmationModal = document.getElementById('confirmation-modal');
         const aboutModal = document.getElementById('about-modal');
         const dataGridModal = document.getElementById('data-grid-modal');
+        const feedbackModal = document.getElementById('feedback-modal');
         let modalOnConfirmCallback = null;
 
         function showModal(modalEl) { modalEl.classList.add('visible'); }
@@ -802,7 +838,7 @@
                 tr.appendChild(th);
                 rowValues.forEach((value, colIndex) => {
                     const td = document.createElement('td');
-                    td.innerHTML = `<input type="number" value="${value}" data-row-index="${rowIndex}" data-col-index="${colIndex}" class="data-value-input">`;
+                    td.innerHTML = `<input type="number" value="${value.toFixed(1)}" data-row-index="${rowIndex}" data-col-index="${colIndex}" class="data-value-input">`;
                     tr.appendChild(td);
                 });
                 dataRowsBody.appendChild(tr);
@@ -967,58 +1003,105 @@
             const y = chartConfig.yAxisScaleType === 'percentage' 
                 ? d3.scaleLinear().domain([0, 1]).range([height, 0])
                 : d3.scaleLinear().domain([0, d3.max(columnTotals) || 1]).range([height, 0]).nice();
-
+            
             const color = d3.scaleOrdinal(chartConfig.segmentColors).domain(chartData.rowLabels);
 
             let currentX = 0;
             const chartDataProcessed = chartData.columnLabels.map((colLabel, i) => {
                 const colTotal = columnTotals[i];
                 const colWidth = x(colTotal);
-                let accumulatedY = 0;
+                let accumulatedYValue = 0;
                 const segments = chartData.rowLabels.map((rowLabel, j) => {
                     const value = chartData.values[j][i];
                     const segment = {
-                        value: value, x: currentX, width: colWidth, color: color(rowLabel),
-                        rowLabel: rowLabel, colLabel: colLabel
+                        value: value, x: currentX, width: colWidth,
+                        color: color(rowLabel),
+                        rowLabel: rowLabel, colLabel: colLabel,
+                        rowIndex: j, colIndex: i
                     };
                     if (chartConfig.yAxisScaleType === 'percentage') {
-                        segment.height = colTotal > 0 ? (value / colTotal) * height : 0;
-                        segment.y = height - accumulatedY - segment.height;
+                        segment.y = colTotal > 0 ? y(accumulatedYValue / colTotal) : y(0);
+                        segment.height = colTotal > 0 ? height - y(value / colTotal) : 0;
+                        segment.y -= segment.height;
                         segment.displayValue = colTotal > 0 ? (value / colTotal) * 100 : 0;
                     } else {
-                        segment.y = y(accumulatedY + value);
-                        segment.height = y(accumulatedY) - y(accumulatedY + value);
+                        segment.y = y(accumulatedYValue + value);
+                        segment.height = y(accumulatedYValue) - y(accumulatedYValue + value);
                         segment.displayValue = value;
                     }
-                    accumulatedY += segment.height;
+                    accumulatedYValue += value;
                     return segment;
                 });
-                const columnData = { column: colLabel, segments: segments, x: currentX + colWidth / 2, total: colTotal };
+                const columnData = { column: colLabel, segments: segments, x: currentX + colWidth / 2, total: colTotal, colIndex: i };
                 currentX += colWidth;
                 return columnData;
             });
 
-            g.selectAll('.column-group').data(chartDataProcessed).enter().append('g')
-                .each(function(d) {
-                    d3.select(this).selectAll('rect').data(d.segments).enter().append('rect')
-                        .attr('x', s => s.x).attr('y', s => s.y).attr('width', s => s.width).attr('height', s => s.height)
-                        .attr('fill', s => s.color).attr('stroke', chartConfig.borderColor).attr('stroke-width', 1.5).attr('rx', 4)
-                        .on('mouseover', (event, s) => {
-                            tooltip.classed('visible', true);
-                            let valueText = chartConfig.yAxisScaleType === 'percentage' ? `${s.displayValue.toFixed(chartConfig.labelPrecision)}%` : s.value.toLocaleString();
-                            tooltip.html(`<strong>${s.colLabel}</strong><br>${s.rowLabel}: ${valueText}`);
-                        })
-                        .on('mousemove', (event) => tooltip.style('left', (event.pageX + 15) + 'px').style('top', (event.pageY - 28) + 'px'))
-                        .on('mouseout', () => tooltip.classed('visible', false));
-                    
-                    if(chartConfig.showDataLabels) {
-                        d3.select(this).selectAll('.segment-label').data(d.segments).enter().append('text')
-                            .attr('class', 'segment-label').attr('x', s => s.x + s.width/2).attr('y', s => s.y + s.height/2).attr('dy', '0.35em')
-                            .attr('font-family', chartConfig.fontFamily).attr('font-size', `${chartConfig.fontSize * 0.9}px`).attr('fill', s => getContrastingTextColor(s.color))
-                            .text(s => (s.width > 20 && s.height > 15 && s.displayValue !== 0) ? `${s.displayValue.toFixed(chartConfig.labelPrecision)}${chartConfig.yAxisScaleType === 'percentage' ? '%' : ''}`: '');
-                    }
+            const columnGroups = g.selectAll('.column-group').data(chartDataProcessed).enter().append('g').attr('class', 'column-group');
+
+            // Draw Rects
+            columnGroups.each(function(d) {
+                d3.select(this).selectAll('.segment-rect').data(d.segments).enter().append('rect')
+                    .attr('class', 'segment-rect')
+                    .attr('x', s => s.x).attr('y', s => s.y).attr('width', s => s.width).attr('height', s => s.height)
+                    .attr('fill', s => s.color).attr('stroke', chartConfig.borderColor).attr('stroke-width', 1.5).attr('rx', 4)
+                    .on('mouseover', (event, s) => {
+                        tooltip.classed('visible', true);
+                        let valueText = chartConfig.yAxisScaleType === 'percentage' ? `${s.displayValue.toFixed(chartConfig.labelPrecision)}%` : s.value.toLocaleString();
+                        tooltip.html(`<strong>${s.colLabel}</strong><br>${s.rowLabel}: ${valueText}`);
+                    })
+                    .on('mousemove', (event) => tooltip.style('left', (event.pageX + 15) + 'px').style('top', (event.pageY - 28) + 'px'))
+                    .on('mouseout', () => tooltip.classed('visible', false));
+            });
+
+            // Draw Labels
+            if(chartConfig.showDataLabels) {
+                columnGroups.each(function(d) {
+                    d3.select(this).selectAll('.segment-label').data(d.segments).enter().append('text')
+                        .attr('class', 'segment-label').attr('x', s => s.x + s.width/2).attr('y', s => s.y + s.height/2).attr('dy', '0.35em')
+                        .attr('font-family', chartConfig.fontFamily).attr('font-size', `${chartConfig.fontSize * 0.9}px`).attr('fill', s => getContrastingTextColor(s.color))
+                        .text(s => (s.width > 20 && s.height > 15 && s.displayValue !== 0) ? `${s.displayValue.toFixed(chartConfig.labelPrecision)}${chartConfig.yAxisScaleType === 'percentage' ? '%' : ''}`: '');
                 });
+            }
             
+            if(isVisualEditMode) {
+                // Draw horizontal drag handles for column widths
+                g.append('g').attr('class', 'drag-handles-horizontal')
+                    .selectAll('.horizontal-drag-handle')
+                    .data(chartDataProcessed.slice(0, -1))
+                    .enter().append('rect')
+                    .attr('class', 'horizontal-drag-handle')
+                    .attr('x', d => d.segments[0].x + d.segments[0].width - 4)
+                    .attr('y', 0)
+                    .attr('width', 8)
+                    .attr('height', height)
+                    .call(d3.drag().on("drag", (event, d) => handleHorizontalDrag(event, d, chartDataProcessed, columnTotals, g)));
+
+                // Draw vertical drag handles for segment heights
+                if (chartConfig.yAxisScaleType === 'percentage') {
+                    columnGroups.each(function(d_col) {
+                        const handleData = d_col.segments.slice(0, -1).map(segment => ({
+                            colIndex: segment.colIndex,
+                            rowIndex: segment.rowIndex, 
+                            x: segment.x,
+                            y: segment.y + segment.height,
+                            width: segment.width
+                        }));
+
+                        d3.select(this).selectAll('.vertical-drag-handle')
+                            .data(handleData)
+                            .enter().append('rect')
+                            .attr('class', 'vertical-drag-handle')
+                            .attr('x', h => h.x)
+                            .attr('y', h => h.y - 2)
+                            .attr('width', h => h.width)
+                            .attr('height', 4)
+                            .call(d3.drag().on("drag", (event, d_handle) => handleVerticalDrag(event, d_handle, g)));
+                    });
+                }
+            }
+
+            // X-Axis Labels (collision detection)
             if (chartConfig.showXAxisLabels) {
                 const labelNodes = chartDataProcessed.map((d, i) => {
                     let totalStr = chartConfig.showColumnTotals ? ` (${chartConfig.abbreviateTotals ? d3.format(".2s")(d.total).replace(/G/,'B') : d.total.toLocaleString()})` : '';
@@ -1072,7 +1155,7 @@
                 } else {
                     let xPos = chartContentMargin.left;
                     let yPos = (chartConfig.legendPlacement === 'below') 
-                        ? chartContentMargin.top + height + 40 // Adjusted for better spacing
+                        ? chartContentMargin.top + height + 40
                         : chartContentMargin.top - (Math.ceil(chartData.rowLabels.length / 5) * legendLineHeight + legendPadding);
                     
                     const availableWidth = currentSvgWidth - chartContentMargin.left - chartContentMargin.right;
@@ -1088,6 +1171,86 @@
                 }
             }
         }
+        
+        function handleHorizontalDrag(event, d, chartDataProcessed, columnTotals, container) {
+            const [pointerX] = d3.pointer(event, container.node());
+            const colIndex = d.colIndex;
+
+            let leftBoundaryX = 0;
+            if (colIndex > 0) {
+                leftBoundaryX = d3.sum(chartDataProcessed.slice(0, colIndex), col => col.segments[0].width);
+            }
+            
+            const rightBoundaryX = d3.sum(chartDataProcessed.slice(0, colIndex + 2), col => col.segments[0].width);
+            const clampedX = Math.max(leftBoundaryX + 10, Math.min(pointerX, rightBoundaryX - 10));
+
+            const combinedWidth = chartDataProcessed[colIndex].segments[0].width + chartDataProcessed[colIndex+1].segments[0].width;
+            if (combinedWidth === 0) return;
+
+            const newWidth1 = clampedX - leftBoundaryX;
+            
+            const total1 = columnTotals[colIndex];
+            const total2 = columnTotals[colIndex + 1];
+            const combinedTotal = total1 + total2;
+            if (combinedTotal === 0) return;
+
+            const newTotal1 = (newWidth1 / combinedWidth) * combinedTotal;
+            const newTotal2 = combinedTotal - newTotal1;
+
+            const ratio1 = (total1 > 0) ? newTotal1 / total1 : 0;
+            const ratio2 = (total2 > 0) ? newTotal2 / total2 : 0;
+
+            for(let i=0; i < chartData.values.length; i++) {
+                chartData.values[i][colIndex] = chartData.values[i][colIndex] * ratio1;
+                chartData.values[i][colIndex + 1] = chartData.values[i][colIndex + 1] * ratio2;
+            }
+            
+            drawMekkoChart();
+            renderDataGrid('sidebar-grid-container');
+        }
+
+        function handleVerticalDrag(event, d_handle, container) {
+            const [, pointerY] = d3.pointer(event, container.node());
+            const colIndex = d_handle.colIndex;
+            const rowIndex = d_handle.rowIndex; // Index of the segment ABOVE the handle
+
+            const columnTotal = d3.sum(chartData.values, row => row[colIndex]);
+            if (columnTotal === 0) return;
+
+            const y = d3.scaleLinear().domain([0, 1]).range([height, 0]);
+
+            let cumulativeValueBefore = 0;
+            for (let i = 0; i < rowIndex; i++) {
+                cumulativeValueBefore += chartData.values[i][colIndex];
+            }
+            
+            const topSegmentValue = chartData.values[rowIndex][colIndex];
+            const bottomSegmentValue = chartData.values[rowIndex + 1][colIndex];
+            const combinedValue = topSegmentValue + bottomSegmentValue;
+            
+            const topBoundaryY = y(cumulativeValueBefore / columnTotal);
+            const bottomBoundaryY = y((cumulativeValueBefore + combinedValue) / columnTotal);
+
+            const clampedY = Math.max(bottomBoundaryY, Math.min(pointerY, topBoundaryY));
+            
+            const newBoundaryPercentage = y.invert(clampedY);
+            const basePercentage = cumulativeValueBefore / columnTotal;
+
+            let newTopPercentage = newBoundaryPercentage - basePercentage;
+            const combinedPercentage = combinedValue / columnTotal;
+
+            if (newTopPercentage < 0) newTopPercentage = 0;
+            if (newTopPercentage > combinedPercentage) newTopPercentage = combinedPercentage;
+
+            const newBottomPercentage = combinedPercentage - newTopPercentage;
+
+            chartData.values[rowIndex][colIndex] = newTopPercentage * columnTotal;
+            chartData.values[rowIndex + 1][colIndex] = newBottomPercentage * columnTotal;
+
+            drawMekkoChart();
+            renderDataGrid('sidebar-grid-container');
+        }
+
 
         function updateToggleIcon() {
             if (sidebar.classList.contains('hidden')) {
@@ -1098,7 +1261,6 @@
         }
 
         function setupEventListeners() {
-            // Sidebar toggle
             document.getElementById('toggle-sidebar-btn').addEventListener('click', () => {
                 sidebar.classList.toggle('hidden');
                 updateToggleIcon();
@@ -1110,7 +1272,6 @@
                 setTimeout(drawMekkoChart, 300);
             });
             
-            // Sidebar font size controls
             document.getElementById('increase-sidebar-font').addEventListener('click', () => {
                 const currentSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-base-font-size'));
                 document.documentElement.style.setProperty('--sidebar-base-font-size', `${Math.min(20, currentSize + 1)}px`);
@@ -1120,7 +1281,6 @@
                 document.documentElement.style.setProperty('--sidebar-base-font-size', `${Math.max(10, currentSize - 1)}px`);
             });
 
-            // Sidebar resize
             let isResizing = false;
             document.getElementById('sidebar-resizer').addEventListener('mousedown', () => { isResizing = true; document.body.style.cursor = 'ew-resize'; });
             document.addEventListener('mousemove', (e) => {
@@ -1130,7 +1290,6 @@
             });
             document.addEventListener('mouseup', () => { isResizing = false; document.body.style.cursor = ''; });
 
-            // Data I/O
             document.getElementById('save-data-btn').addEventListener('click', () => {
                 const state = { chartData, chartConfig, dataTitles: { row: document.getElementById('row-title-input').value, column: document.getElementById('column-title-input').value, data: document.getElementById('data-title-input').value } };
                 const blob = new Blob([JSON.stringify(state, null, 2)], {type: "application/json"});
@@ -1175,7 +1334,6 @@
                 });
             });
 
-            // Export
             document.getElementById('export-png-btn').addEventListener('click', () => {
                 document.getElementById('toggle-sidebar-btn').style.display = 'none';
                 html2canvas(document.getElementById('chart-container')).then(canvas => {
@@ -1195,7 +1353,6 @@
                 URL.revokeObjectURL(url);
             });
 
-            // Transpose
             document.getElementById('transpose-btn').addEventListener('click', () => {
                 const transposedValues = chartData.values[0].map((_, colIndex) => chartData.values.map(row => row[colIndex]));
                 [chartData.values, chartData.rowLabels, chartData.columnLabels] = [transposedValues, chartData.columnLabels, chartData.rowLabels];
@@ -1204,8 +1361,16 @@
                 [rowTitleEl.value, colTitleEl.value] = [colTitleEl.value, rowTitleEl.value];
                 renderDataGrid('sidebar-grid-container'); drawMekkoChart();
             });
+            
+            document.getElementById('visual-edit-toggle').addEventListener('click', (e) => {
+                isVisualEditMode = !isVisualEditMode;
+                e.currentTarget.classList.toggle('active', isVisualEditMode);
+                if (isVisualEditMode && chartConfig.yAxisScaleType !== 'percentage') {
+                    showConfirmationModal("Visual editing for row heights is only available in 'Percentage' Y-axis scale mode. Column width editing is still active.", ()=>{}, true);
+                }
+                drawMekkoChart();
+            });
 
-            // Config inputs
             sidebar.addEventListener('input', (e) => {
                 const targetId = e.target.id;
                 const targetValue = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
@@ -1223,7 +1388,6 @@
                 if (configMap[targetId]) {
                     chartConfig[configMap[targetId]] = (configMap[targetId] === 'segmentColors') ? targetValue.split(',').map(c=>c.trim()) : targetValue;
                 } else if (targetId === 'font-size') {
-                    // Main font size acts as an override
                     const newSize = parseInt(targetValue);
                     chartConfig.fontSize = newSize;
                     chartConfig.legendFontSize = newSize;
@@ -1231,7 +1395,7 @@
                     chartConfig.rowTitleFontSize = Math.round(newSize * 1.2);
                     chartConfig.columnTitleFontSize = Math.round(newSize * 1.2);
                     chartConfig.dataTitleFontSize = Math.round(newSize * 1.2);
-                    initializeConfigInputs(); // Refresh inputs to show new values
+                    initializeConfigInputs();
                 } else if (targetId === 'theme-preset') {
                     Object.assign(chartConfig, themes[targetValue]);
                     initializeConfigInputs();
@@ -1246,7 +1410,6 @@
                 drawMekkoChart();
             });
             
-            // Individual font size control buttons
             sidebar.addEventListener('click', (e) => {
                 const button = e.target.closest('.font-size-control-btn');
                 if (!button) return;
@@ -1258,11 +1421,12 @@
                 drawMekkoChart();
             });
 
-            // Modals
             document.getElementById('modal-yes-btn').addEventListener('click', () => { if (modalOnConfirmCallback) modalOnConfirmCallback(); hideModal(confirmationModal); });
             document.getElementById('modal-no-btn').addEventListener('click', () => hideModal(confirmationModal));
             document.getElementById('info-icon').addEventListener('click', () => showModal(aboutModal));
             document.getElementById('about-modal-close-btn').addEventListener('click', () => hideModal(aboutModal));
+            document.getElementById('feedback-icon').addEventListener('click', () => showModal(feedbackModal));
+            document.getElementById('feedback-modal-close-btn').addEventListener('click', () => hideModal(feedbackModal));
             document.getElementById('maximize-grid-btn').addEventListener('click', () => {
                 renderDataGrid('modal-grid-container');
                 showModal(dataGridModal);
@@ -1273,7 +1437,6 @@
             });
         }
 
-        // --- Initial Setup ---
         window.onload = () => {
             document.querySelectorAll('.sidebar-accordion details').forEach(detail => {
                 detail.removeAttribute('open');
