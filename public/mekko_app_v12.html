@@ -58,11 +58,23 @@
         window.auth = null;
         window.currentUserId = null;
 
-        // Initialize Firebase
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        // --- DIRECT FIX START ---
+        // The Firebase configuration is now hardcoded here.
+        // This replaces the logic that tried to read from environment variables.
+        const appId = "mekkochartapp";
+        const firebaseConfig = {
+            apiKey: "AIzaSyA3YYDmmA-Gy3EH--206L2zvOCVSiEVQiE",
+            authDomain: "mekkochartapp.firebaseapp.com",
+            projectId: "mekkochartapp",
+            storageBucket: "mekkochartapp.firebasestorage.app",
+            messagingSenderId: "770033353817",
+            appId: "1:770033353817:web:fa65f4cf9ad61397b35d48",
+            measurementId: "G-G9JS1M5X73"
+        };
+        // --- DIRECT FIX END ---
 
-        if (Object.keys(firebaseConfig).length > 0) {
+        if (Object.keys(firebaseConfig).length > 0 && firebaseConfig.apiKey) {
+            console.log("✅ Firebase config found. Initializing...");
             window.firebaseApp = initializeApp(firebaseConfig);
             window.db = getFirestore(window.firebaseApp);
             window.auth = getAuth(window.firebaseApp);
@@ -115,15 +127,19 @@
                 db: window.db,
                 auth: window.auth,
                 currentUserId: () => window.currentUserId,
-                collection, doc, addDoc, getDocs, deleteDoc,
+                collection, doc, addDoc, getDocs, deleteDoc, getDoc,
                 appId: appId // Expose appId
             };
         } else {
             console.warn("Firebase config not found. Online save/load will not be available.");
-            document.getElementById('user-id-display').textContent = `User ID: Offline Mode`;
+            const userIdDisplay = document.getElementById('user-id-display');
+            const saveBtn = document.getElementById('save-chart-online-btn');
+            const loadBtn = document.getElementById('load-chart-online-btn');
+            
+            if(userIdDisplay) userIdDisplay.textContent = `User ID: Offline Mode`;
             // Disable online buttons if Firebase is not configured
-            document.getElementById('save-chart-online-btn').disabled = true;
-            document.getElementById('load-chart-online-btn').disabled = true;
+            if(saveBtn) saveBtn.disabled = true;
+            if(loadBtn) loadBtn.disabled = true;
         }
     </script>
 
@@ -1553,19 +1569,23 @@
                 if (querySnapshot.empty) {
                     savedChartsList.innerHTML = '<li class="text-center text-gray-500">No charts saved yet.</li>';
                 } else {
+                    const charts = [];
                     querySnapshot.forEach((doc) => {
-                        const chart = doc.data();
+                        charts.push({ id: doc.id, ...doc.data() });
+                    });
+
+                    // Sort charts by timestamp, newest first
+                    charts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+                    charts.forEach((chart) => {
                         const li = document.createElement('li');
-                        li.dataset.chartId = doc.id;
+                        li.dataset.chartId = chart.id;
                         li.innerHTML = `
-                            <div class="chart-info">
+                            <div class="chart-info" onclick="loadSingleChart('${chart.id}')">
                                 <div class="chart-name">${chart.name}</div>
                                 <div class="chart-date">${new Date(chart.timestamp).toLocaleString()}</div>
                             </div>
                             <div class="chart-actions">
-                                <button class="load-single-chart-btn" title="Load Chart">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.94 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 16c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
-                                </button>
                                 <button class="delete-single-chart-btn" title="Delete Chart">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                                 </button>
@@ -1574,13 +1594,6 @@
                         savedChartsList.appendChild(li);
                     });
 
-                    savedChartsList.querySelectorAll('.load-single-chart-btn').forEach(button => {
-                        button.onclick = (event) => {
-                            event.stopPropagation(); // Prevent li click
-                            const chartId = event.currentTarget.closest('li').dataset.chartId;
-                            loadSingleChart(chartId);
-                        };
-                    });
                     savedChartsList.querySelectorAll('.delete-single-chart-btn').forEach(button => {
                         button.onclick = (event) => {
                             event.stopPropagation(); // Prevent li click
@@ -1637,7 +1650,7 @@
             try {
                 const chartDocRef = window.firebase.doc(window.firebase.db, `artifacts/${window.firebase.appId}/users/${window.firebase.currentUserId()}/charts`, chartId);
                 await window.firebase.deleteDoc(chartDocRef);
-                showConfirmationModal("Chart deleted successfully!", () => {}, true);
+                // No confirmation modal on success, just refresh the list
                 loadChartsOnline(); // Refresh the list
             } catch (e) {
                 console.error("Error deleting chart: ", e);
@@ -1836,11 +1849,27 @@
         }
 
         window.onload = () => {
+            // Wait for Firebase to initialize before doing anything that depends on it.
+            const checkFirebase = setInterval(() => {
+                if (window.firebase) {
+                    clearInterval(checkFirebase);
+                    // Now that Firebase is ready, enable the buttons
+                    const saveBtn = document.getElementById('save-chart-online-btn');
+                    const loadBtn = document.getElementById('load-chart-online-btn');
+                    if(saveBtn) saveBtn.disabled = false;
+                    if(loadBtn) loadBtn.disabled = false;
+                }
+            }, 100);
+
             document.querySelectorAll('.sidebar-accordion details').forEach(detail => {
                 detail.removeAttribute('open');
             });
 
-            sidebar.classList.add('hidden');
+            if (window.innerWidth > 768) {
+                sidebar.classList.remove('hidden');
+            } else {
+                sidebar.classList.add('hidden');
+            }
             updateToggleIcon();
 
             renderDataGrid('sidebar-grid-container');
