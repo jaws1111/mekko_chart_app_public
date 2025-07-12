@@ -344,7 +344,7 @@
         .sidebar-accordion details {
             border: 1px solid #e2e8f0;
             border-radius: 0.5rem;
-            margin-bottom: 1rem;
+            margin-bottom: 0.1rem; /* Reduced from 1rem to make the menu more compact */
             background-color: #ffffff;
             box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
@@ -352,7 +352,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0.75rem 1rem;
+            padding: 0.5rem 0.7rem;
             font-weight: 600;
             cursor: pointer;
             list-style: none;
@@ -360,7 +360,7 @@
         .sidebar-accordion summary::-webkit-details-marker { display: none; }
         .sidebar-accordion summary .accordion-icon { transition: transform 0.2s; }
         .sidebar-accordion details[open] summary .accordion-icon { transform: rotate(90deg); }
-        .sidebar-accordion .accordion-content { padding: 0 1rem 1rem 1rem; border-top: 1px solid #e2e8f0; }
+        .sidebar-accordion .accordion-content { padding: 0 0.7rem 0.7rem 0.7rem; border-top: 1px solid #e2e8f0; }
         .sidebar-label { font-size: inherit; margin-bottom: 0.25rem; display: block; }
         .sidebar-input, .sidebar-select {
             padding: 0.375rem;
@@ -394,16 +394,16 @@
 
         #app-footer {
             flex-shrink: 0;
-            padding: 0.5rem 1rem;
+            padding: 0.5rem 0.75rem;
             text-align: center;
-            font-size: 0.875rem;
+            font-size: 0.8rem;
             color: #64748b;
             background-color: #f8fafc;
             border-top: 1px solid #e2e8f0;
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 0.75rem;
+            gap: 0.5rem;
         }
         #app-footer a { color: #3b82f6; text-decoration: none; font-weight: 500; }
         #app-footer a:hover { text-decoration: underline; }
@@ -601,17 +601,17 @@
                     <summary>Data & Export <span class="accordion-icon">&gt;</span></summary>
                     <div class="accordion-content space-y-3 pt-4">
                         <div class="flex items-center space-x-2">
-                            <button id="save-data-btn" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600">Save Data (Local)</button>
+                            <button id="save-data-btn" class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-indigo-200 rounded-md hover:bg-indigo-300">Save Data (Local)</button>
                             <input type="file" id="load-data-input" class="hidden" accept=".json">
                             <label for="load-data-input" class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 cursor-pointer text-center">Load Data (Local)</label>
                         </div>
                         <div class="flex items-center space-x-2">
-                            <button id="save-chart-online-btn" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-500 rounded-md hover:bg-indigo-600" disabled>Save Chart (Online)</button>
+                            <button id="save-chart-online-btn" class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-indigo-200 rounded-md hover:bg-indigo-300" disabled>Save Chart (Online)</button>
                             <button id="load-chart-online-btn" class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300" disabled>Load Chart (Online)</button>
                         </div>
                         <div class="flex items-center space-x-2">
-                            <button id="export-png-btn" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-md hover:bg-green-600">Export as PNG</button>
-                            <button id="export-svg-btn" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-purple-500 rounded-md hover:bg-purple-600">Export as SVG</button>
+                            <button id="export-png-btn" class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-green-200 rounded-md hover:bg-green-300">Export as PNG</button>
+                            <button id="export-svg-btn" class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-green-200 rounded-md hover:bg-green-300">Export as SVG</button>
                         </div>
                     </div>
                 </details>
@@ -1268,7 +1268,6 @@
                         rowIndex: j, colIndex: i
                     };
                     
-                    // *** BUG FIX: Replaced complex y/height calculation with a clearer, more direct method ***
                     if (chartConfig.yAxisScaleType === 'percentage') {
                         const startPercent = accumulatedYValue / colTotal;
                         const endPercent = (accumulatedYValue + value) / colTotal;
@@ -1330,7 +1329,6 @@
                 // Vertical drag for segment heights
                 if (chartConfig.yAxisScaleType === 'percentage') {
                     columnGroups.each(function(d_col) {
-                        // *** BUG FIX: Correctly calculate handle `y` position using the new segment logic ***
                         const handleData = d_col.segments.slice(0, -1).map(segment => ({
                             colIndex: segment.colIndex, rowIndex: segment.rowIndex, 
                             x: segment.x, y: segment.y, width: segment.width
