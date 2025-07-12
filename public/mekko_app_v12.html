@@ -7,7 +7,7 @@
     <meta name="description" content="Generate Mekko charts quickly with free tool at mekkochart.vercel.app. Customize colors, formatting, and sizes for data visualizations.">
     <meta name="keywords" content="Mekko chart, chart generator, data visualization, custom charts, free chart tool">
     <meta name="author" content="Andrius Varanavicius">
-    <meta name="application-version" content="0.14.4">
+    <meta name="application-version" content="0.15.0">
     <meta name="robots" content="index, follow">
     <meta property="og:title" content="Mekko Chart Generator - Create Custom Charts">
     <meta property="og:description" content="Easily create and customize Mekko charts with our free online tool at mekkochart.vercel.app. Perfect for data visualization.">
@@ -29,7 +29,7 @@
       "description": "A free online tool to create and customize Mekko charts for data visualization.",
       "applicationCategory": "Data Visualization Tool",
       "operatingSystem": "Web",
-      "softwareVersion": "0.14.4",
+      "softwareVersion": "0.15.0",
       "url": "https://mekkochart.vercel.app/",
       "offers": {
         "@type": "Offer",
@@ -621,7 +621,7 @@
                     <summary class="flex items-center justify-between">
                         <span>Data Input</span>
                         <div class="flex items-center gap-2">
-                            <button id="visual-edit-toggle" title="Toggle Visual Data Editing" class="p-1 hover:bg-gray-200 rounded-full">
+                            <button id="visual-edit-toggle" title="Drag to visually resize chart segments and columns" class="p-1 hover:bg-gray-200 rounded-full">
                                 <svg class="w-5 h-5 text-gray-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
                             </button>
                             <button id="delete-all-data-btn" title="Delete All Data" class="p-1 hover:bg-gray-200 rounded-full">
@@ -692,6 +692,7 @@
                                 <option value="grey">Grey</option>
                                 <option value="darkGrey">Dark Grey</option>
                                 <option value="pitchBlack">Pitch Black</option>
+                                <option value="techNoir">Tech Noir</option>
                             </select>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
@@ -960,7 +961,8 @@
             light: { backgroundColor: '#f8fafc', borderColor: '#e2e8f0', fontColor: '#1e293b', segmentColors: ['#6366f1', '#a855f7', '#ec4899', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6'] },
             grey: { backgroundColor: '#e5e7eb', borderColor: '#9ca3af', fontColor: '#374151', segmentColors: ['#6b7280', '#9ca3af', '#d1d5db', '#e5e7eb', '#4b5563', '#1f2937'] },
             darkGrey: { backgroundColor: '#1f2937', borderColor: '#4b5563', fontColor: '#f9fafb', segmentColors: ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#6b7280', '#9ca3af'] },
-            pitchBlack: { backgroundColor: '#000000', borderColor: '#374151', fontColor: '#f9fafb', segmentColors: ['#a78bfa', '#f472b6', '#fbbf24', '#4ade80', '#60a5fa', '#ef4444', '#9ca3af', '#e5e7eb'] }
+            pitchBlack: { backgroundColor: '#000000', borderColor: '#374151', fontColor: '#f9fafb', segmentColors: ['#a78bfa', '#f472b6', '#fbbf24', '#4ade80', '#60a5fa', '#ef4444', '#9ca3af', '#e5e7eb'] },
+            techNoir: { backgroundColor: '#111111', borderColor: '#444444', fontColor: '#EAEAEA', segmentColors: ['#B0B0B0', '#888888', '#606060', '#404040', '#282828', '#E0E0E0', '#00A9E0'] }
         };
 
         const palettes = {
@@ -1311,38 +1313,30 @@
             }
             
             if(isVisualEditMode) {
-                // Draw horizontal drag handles for column widths
+                // Horizontal drag for column widths
                 g.append('g').attr('class', 'drag-handles-horizontal')
                     .selectAll('.horizontal-drag-handle')
                     .data(chartDataProcessed.slice(0, -1))
                     .enter().append('rect')
                     .attr('class', 'horizontal-drag-handle')
                     .attr('x', d => d.segments[0].x + d.segments[0].width - 4)
-                    .attr('y', 0)
-                    .attr('width', 8)
-                    .attr('height', height)
-                    .call(d3.drag().on("drag", (event, d) => handleHorizontalDrag(event, d, chartDataProcessed, columnTotals, g)));
+                    .attr('y', 0).attr('width', 8).attr('height', height)
+                    .call(d3.drag().on("drag", handleHorizontalDrag));
 
-                // Draw vertical drag handles for segment heights
+                // Vertical drag for segment heights
                 if (chartConfig.yAxisScaleType === 'percentage') {
                     columnGroups.each(function(d_col) {
                         const handleData = d_col.segments.slice(0, -1).map(segment => ({
-                            colIndex: segment.colIndex,
-                            rowIndex: segment.rowIndex, 
-                            x: segment.x,
-                            y: segment.y + segment.height,
-                            width: segment.width
+                            colIndex: segment.colIndex, rowIndex: segment.rowIndex, 
+                            x: segment.x, y: segment.y + segment.height, width: segment.width
                         }));
 
                         d3.select(this).selectAll('.vertical-drag-handle')
-                            .data(handleData)
-                            .enter().append('rect')
+                            .data(handleData).enter().append('rect')
                             .attr('class', 'vertical-drag-handle')
-                            .attr('x', h => h.x)
-                            .attr('y', h => h.y - 2)
-                            .attr('width', h => h.width)
-                            .attr('height', 4)
-                            .call(d3.drag().on("drag", (event, d_handle) => handleVerticalDrag(event, d_handle, g)));
+                            .attr('x', h => h.x).attr('y', h => h.y - 2)
+                            .attr('width', h => h.width).attr('height', 4)
+                            .call(d3.drag().on("drag", handleVerticalDrag));
                     });
                 }
             }
@@ -1418,80 +1412,54 @@
             }
         }
         
-        function handleHorizontalDrag(event, d, chartDataProcessed, columnTotals, container) {
-            const [pointerX] = d3.pointer(event, container.node());
-            const colIndex = d.colIndex;
+        function handleHorizontalDrag(event, d) {
+            const colIndex1 = d.colIndex;
+            const colIndex2 = d.colIndex + 1;
 
-            let leftBoundaryX = 0;
-            if (colIndex > 0) {
-                leftBoundaryX = d3.sum(chartDataProcessed.slice(0, colIndex), col => col.segments[0].width);
-            }
-            
-            const rightBoundaryX = d3.sum(chartDataProcessed.slice(0, colIndex + 2), col => col.segments[0].width);
-            const clampedX = Math.max(leftBoundaryX + 10, Math.min(pointerX, rightBoundaryX - 10));
-
-            const combinedWidth = chartDataProcessed[colIndex].segments[0].width + chartDataProcessed[colIndex+1].segments[0].width;
-            if (combinedWidth === 0) return;
-
-            const newWidth1 = clampedX - leftBoundaryX;
-            
-            const total1 = columnTotals[colIndex];
-            const total2 = columnTotals[colIndex + 1];
+            const total1 = d3.sum(chartData.values, row => row[colIndex1]);
+            const total2 = d3.sum(chartData.values, row => row[colIndex2]);
             const combinedTotal = total1 + total2;
             if (combinedTotal === 0) return;
 
-            const newTotal1 = (newWidth1 / combinedWidth) * combinedTotal;
-            const newTotal2 = combinedTotal - newTotal1;
+            const overallTotal = d3.sum(chartData.values, row => d3.sum(row));
+            const changeInData = (event.dx / width) * overallTotal;
 
-            const ratio1 = (total1 > 0) ? newTotal1 / total1 : 0;
-            const ratio2 = (total2 > 0) ? newTotal2 / total2 : 0;
+            const newTotal1 = total1 + changeInData;
+            const newTotal2 = total2 - changeInData;
 
-            for(let i=0; i < chartData.values.length; i++) {
-                chartData.values[i][colIndex] = chartData.values[i][colIndex] * ratio1;
-                chartData.values[i][colIndex + 1] = chartData.values[i][colIndex + 1] * ratio2;
+            if (newTotal1 < 0 || newTotal2 < 0) return;
+
+            const ratio1 = total1 > 0 ? newTotal1 / total1 : 0;
+            const ratio2 = total2 > 0 ? newTotal2 / total2 : 0;
+
+            for (let i = 0; i < chartData.values.length; i++) {
+                chartData.values[i][colIndex1] *= ratio1;
+                chartData.values[i][colIndex2] *= ratio2;
             }
             
             drawMekkoChart();
             renderDataGrid('sidebar-grid-container');
         }
 
-        function handleVerticalDrag(event, d_handle, container) {
-            const [, pointerY] = d3.pointer(event, container.node());
-            const colIndex = d_handle.colIndex;
-            const rowIndex = d_handle.rowIndex; // Index of the segment ABOVE the handle
+        function handleVerticalDrag(event, d) {
+            const colIndex = d.colIndex;
+            const rowIndex1 = d.rowIndex;
+            const rowIndex2 = d.rowIndex + 1;
 
-            const columnTotal = d3.sum(chartData.values, row => row[colIndex]);
-            if (columnTotal === 0) return;
+            const colTotal = d3.sum(chartData.values, row => row[colIndex]);
+            if (colTotal === 0) return;
 
-            const y = d3.scaleLinear().domain([0, 1]).range([height, 0]);
-
-            let cumulativeValueBefore = 0;
-            for (let i = 0; i < rowIndex; i++) {
-                cumulativeValueBefore += chartData.values[i][colIndex];
-            }
+            const value1 = chartData.values[rowIndex1][colIndex];
+            const value2 = chartData.values[rowIndex2][colIndex];
             
-            const topSegmentValue = chartData.values[rowIndex][colIndex];
-            const bottomSegmentValue = chartData.values[rowIndex + 1][colIndex];
-            const combinedValue = topSegmentValue + bottomSegmentValue;
-            
-            const topBoundaryY = y(cumulativeValueBefore / columnTotal);
-            const bottomBoundaryY = y((cumulativeValueBefore + combinedValue) / columnTotal);
+            // Convert pixel change (dy) to a change in data value
+            const changeInValue = -(event.dy / height) * colTotal;
 
-            const clampedY = Math.max(bottomBoundaryY, Math.min(pointerY, topBoundaryY));
-            
-            const newBoundaryPercentage = y.invert(clampedY);
-            const basePercentage = cumulativeValueBefore / columnTotal;
+            // Prevent values from becoming negative
+            if (value1 + changeInValue < 0 || value2 - changeInValue < 0) return;
 
-            let newTopPercentage = newBoundaryPercentage - basePercentage;
-            const combinedPercentage = combinedValue / columnTotal;
-
-            if (newTopPercentage < 0) newTopPercentage = 0;
-            if (newTopPercentage > combinedPercentage) newTopPercentage = combinedPercentage;
-
-            const newBottomPercentage = combinedPercentage - newTopPercentage;
-
-            chartData.values[rowIndex][colIndex] = newTopPercentage * columnTotal;
-            chartData.values[rowIndex + 1][colIndex] = newBottomPercentage * columnTotal;
+            chartData.values[rowIndex1][colIndex] += changeInValue;
+            chartData.values[rowIndex2][colIndex] -= changeInValue;
 
             drawMekkoChart();
             renderDataGrid('sidebar-grid-container');
@@ -1528,10 +1496,12 @@
                 return;
             }
 
+            // Create a deep copy to avoid modifying the live chartData object
             const dataToSave = {
                 name: chartName,
-                chartData: JSON.parse(JSON.stringify(chartData)),
-                chartConfig: JSON.parse(JSON.stringify(chartConfig)),
+                // Stringify chartData to handle nested arrays for Firestore
+                chartData: JSON.stringify(chartData), 
+                chartConfig: chartConfig,
                 dataTitles: {
                     row: document.getElementById('row-title-input').value,
                     column: document.getElementById('column-title-input').value,
@@ -1622,7 +1592,8 @@
 
                 if (docSnap.exists()) {
                     const chartDataLoaded = docSnap.data();
-                    chartData = chartDataLoaded.chartData;
+                    // Parse the stringified chartData back into an object
+                    chartData = JSON.parse(chartDataLoaded.chartData); 
                     chartConfig = chartDataLoaded.chartConfig;
                     document.getElementById('row-title-input').value = chartDataLoaded.dataTitles.row;
                     document.getElementById('column-title-input').value = chartDataLoaded.dataTitles.column;
