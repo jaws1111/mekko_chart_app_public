@@ -7,7 +7,7 @@
     <meta name="description" content="Generate Mekko charts quickly with free tool at mekkochart.vercel.app. Customize colors, formatting, and sizes for data visualizations.">
     <meta name="keywords" content="Mekko chart, chart generator, data visualization, custom charts, free chart tool">
     <meta name="author" content="Andrius Varanavicius">
-    <meta name="application-version" content="0.16.0">
+    <meta name="application-version" content="0.17.0">
     <meta name="robots" content="index, follow">
     <meta property="og:title" content="Mekko Chart Generator - Create Custom Charts">
     <meta property="og:description" content="Easily create and customize Mekko charts with our free online tool at mekkochart.vercel.app. Perfect for data visualization.">
@@ -29,7 +29,7 @@
       "description": "A free online tool to create and customize Mekko charts for data visualization.",
       "applicationCategory": "Data Visualization Tool",
       "operatingSystem": "Web",
-      "softwareVersion": "0.16.0",
+      "softwareVersion": "0.17.0",
       "url": "https://mekkochart.vercel.app/",
       "offers": {
         "@type": "Offer",
@@ -48,8 +48,9 @@
 
     <!-- Firebase SDKs -->
     <script type="module">
+        // Import necessary Firebase modules, now including Google Auth
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, collection, query, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global Firebase variables
@@ -58,9 +59,7 @@
         window.auth = null;
         window.currentUserId = null;
 
-        // --- DIRECT FIX START ---
-        // The Firebase configuration is now hardcoded here.
-        // This replaces the logic that tried to read from environment variables.
+        // Your Firebase configuration
         const appId = "mekkochartapp";
         const firebaseConfig = {
             apiKey: "AIzaSyA3YYDmmA-Gy3EH--206L2zvOCVSiEVQiE",
@@ -71,7 +70,6 @@
             appId: "1:770033353817:web:fa65f4cf9ad61397b35d48",
             measurementId: "G-G9JS1M5X73"
         };
-        // --- DIRECT FIX END ---
 
         if (Object.keys(firebaseConfig).length > 0 && firebaseConfig.apiKey) {
             console.log("✅ Firebase config found. Initializing...");
@@ -79,44 +77,74 @@
             window.db = getFirestore(window.firebaseApp);
             window.auth = getAuth(window.firebaseApp);
 
-            // Listen for auth state changes
-            onAuthStateChanged(window.auth, async (user) => {
-                if (user) {
-                    window.currentUserId = user.uid;
-                    console.log("User signed in:", user.uid);
-                } else {
-                    // User is signed out, or no user is signed in.
-                    // If __initial_auth_token is not defined, sign in anonymously.
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        try {
-                            await signInWithCustomToken(window.auth, __initial_auth_token);
-                            console.log("Signed in with custom token.");
-                        } catch (error) {
-                            console.error("Error signing in with custom token:", error);
-                            await signInAnonymously(window.auth);
-                            console.log("Signed in anonymously due to custom token error.");
-                        }
-                    } else {
-                        await signInAnonymously(window.auth);
-                        console.log("Signed in anonymously.");
+            // Function to handle Google Sign-In
+            window.signInWithGoogle = async () => {
+                const provider = new GoogleAuthProvider();
+                try {
+                    await signInWithPopup(window.auth, provider);
+                } catch (error) {
+                    console.error("Error signing in with Google:", error);
+                    // Avoid showing an error modal if the user simply closes the popup
+                    if (error.code !== 'auth/popup-closed-by-user') {
+                         // A function to show a simple modal should be defined in your main script
+                         if(window.showConfirmationModal) {
+                            window.showConfirmationModal(`Google Sign-In Error: ${error.message}`, () => {}, true);
+                         } else {
+                            alert(`Google Sign-In Error: ${error.message}`);
+                         }
                     }
-                    window.currentUserId = window.auth.currentUser?.uid || crypto.randomUUID(); // Fallback if anonymous fails or not yet set
                 }
-                document.getElementById('user-id-display').textContent = `User ID: ${window.currentUserId}`;
-                // Re-enable online save/load buttons after auth state is known
-                document.getElementById('save-chart-online-btn').disabled = false;
-                document.getElementById('load-chart-online-btn').disabled = false;
+            };
+
+            // Listen for auth state changes to update the UI
+            onAuthStateChanged(window.auth, (user) => {
+                const userProfile = document.getElementById('user-profile');
+                const userName = document.getElementById('user-name');
+                const userPhoto = document.getElementById('user-photo');
+                const signInBtn = document.getElementById('sign-in-btn');
+                const signOutBtn = document.getElementById('sign-out-btn');
+                const userIdDisplay = document.getElementById('user-id-display');
+                const saveOnlineBtn = document.getElementById('save-chart-online-btn');
+                const loadOnlineBtn = document.getElementById('load-chart-online-btn');
+
+                if (user) {
+                    // User is signed in
+                    window.currentUserId = user.uid;
+                    console.log("User signed in:", user.uid, user.displayName);
+
+                    // Update UI for signed-in user
+                    userName.textContent = user.displayName || user.email;
+                    userPhoto.src = user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName || user.email}&background=random`;
+                    userProfile.classList.remove('hidden');
+                    signInBtn.classList.add('hidden');
+                    signOutBtn.classList.remove('hidden');
+                    userIdDisplay.textContent = `UID: ${user.uid}`; // Display UID for reference
+
+                    // Enable online features
+                    saveOnlineBtn.disabled = false;
+                    loadOnlineBtn.disabled = false;
+                } else {
+                    // User is signed out
+                    window.currentUserId = null;
+                    console.log("User is signed out.");
+
+                    // Update UI for signed-out user
+                    userProfile.classList.add('hidden');
+                    signInBtn.classList.remove('hidden');
+                    signOutBtn.classList.add('hidden');
+                    userIdDisplay.textContent = "Signed Out";
+
+                    // Disable online features
+                    saveOnlineBtn.disabled = true;
+                    loadOnlineBtn.disabled = true;
+                }
             });
 
             // Expose signOut function globally for the button
             window.signOutUser = async () => {
                 try {
                     await signOut(window.auth);
-                    console.log("User signed out.");
-                    window.currentUserId = null; // Clear user ID
-                    document.getElementById('user-id-display').textContent = `User ID: Not signed in`;
-                    // Optionally, sign in anonymously again after explicit sign out
-                    await signInAnonymously(window.auth);
+                    console.log("User signed out successfully.");
                 } catch (error) {
                     console.error("Error signing out:", error);
                 }
@@ -132,12 +160,14 @@
             };
         } else {
             console.warn("Firebase config not found. Online save/load will not be available.");
+            // Handle UI when Firebase is not configured
             const userIdDisplay = document.getElementById('user-id-display');
             const saveBtn = document.getElementById('save-chart-online-btn');
             const loadBtn = document.getElementById('load-chart-online-btn');
+            const signInBtn = document.getElementById('sign-in-btn');
             
-            if(userIdDisplay) userIdDisplay.textContent = `User ID: Offline Mode`;
-            // Disable online buttons if Firebase is not configured
+            if(userIdDisplay) userIdDisplay.textContent = `Offline Mode`;
+            if(signInBtn) signInBtn.style.display = 'none';
             if(saveBtn) saveBtn.disabled = true;
             if(loadBtn) loadBtn.disabled = true;
         }
@@ -394,38 +424,66 @@
 
         #app-footer {
             flex-shrink: 0;
-            padding: 0.5rem 0.75rem;
+            padding: 0.5rem 1rem;
             text-align: center;
             font-size: 0.8rem;
             color: #64748b;
             background-color: #f8fafc;
             border-top: 1px solid #e2e8f0;
             display: flex;
-            justify-content: center;
+            justify-content: space-between;
             align-items: center;
-            gap: 0.5rem;
+            gap: 1rem;
         }
         #app-footer a { color: #3b82f6; text-decoration: none; font-weight: 500; }
         #app-footer a:hover { text-decoration: underline; }
         #info-icon, #feedback-icon { cursor: pointer; color: #9ca3af; }
         #info-icon:hover, #feedback-icon:hover { color: #4b5563; }
+        
+        #auth-container {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        #user-profile.hidden, #sign-in-btn.hidden, #sign-out-btn.hidden {
+            display: none;
+        }
+        #user-profile {
+             display: flex;
+             align-items: center;
+             gap: 0.5rem;
+        }
         #user-id-display {
             font-size: 0.75rem;
             color: #64748b;
-            margin-left: 1rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 150px; /* Adjust as needed */
+            max-width: 150px;
+        }
+        #sign-in-btn {
+            background-color: #4285F4;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border: none;
+        }
+        #sign-in-btn:hover {
+            background-color: #3367D6;
         }
         #sign-out-btn {
             background-color: #ef4444;
             color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-            font-size: 0.75rem;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 500;
             cursor: pointer;
             transition: background-color 0.2s;
+            border: none;
         }
         #sign-out-btn:hover {
             background-color: #dc2626;
@@ -810,17 +868,26 @@
     </div>
     
     <footer id="app-footer">
-        <a href="https://mekkochart.vercel.app/" target="_blank">Quick Mekko Chart &copy; 2025 AV</a>
-        <span id="user-id-display">User ID: Loading...</span>
-        <button id="sign-out-btn" onclick="window.signOutUser()">Sign Out</button>
-        <span id="feedback-icon" title="Submit Feedback">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 12H5v-2h14v2zm0-3H5V9h14v2zm0-3H5V6h14v2z"/>
-            </svg>
-        </span>
-        <span id="info-icon" title="About this App">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-        </span>
+        <div class="flex items-center gap-4">
+            <a href="https://mekkochart.vercel.app/" target="_blank">Quick Mekko Chart &copy; 2025 AV</a>
+            <span id="info-icon" title="About this App">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+            </span>
+            <span id="feedback-icon" title="Submit Feedback">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 12H5v-2h14v2zm0-3H5V9h14v2zm0-3H5V6h14v2z"/>
+                </svg>
+            </span>
+        </div>
+        <div id="auth-container">
+            <div id="user-profile" class="hidden">
+                <img id="user-photo" class="w-8 h-8 rounded-full" src="" alt="User Photo">
+                <span id="user-name" class="text-sm font-medium text-gray-800"></span>
+            </div>
+            <button id="sign-in-btn">Sign in with Google</button>
+            <button id="sign-out-btn" onclick="window.signOutUser()" class="hidden">Sign Out</button>
+        </div>
+        <span id="user-id-display">Initializing...</span>
     </footer>
 
     <div id="tooltip"></div>
@@ -996,7 +1063,8 @@
         function showModal(modalEl) { modalEl.classList.add('visible'); }
         function hideModal(modalEl) { modalEl.classList.remove('visible'); }
         
-        function showConfirmationModal(message, onConfirm, isAlert = false) {
+        // Make this function globally available for the Firebase script
+        window.showConfirmationModal = function(message, onConfirm, isAlert = false) {
             document.getElementById('modal-message').textContent = message;
             modalOnConfirmCallback = onConfirm;
             document.getElementById('modal-yes-btn').style.display = isAlert ? 'none' : 'inline-block';
@@ -1479,7 +1547,7 @@
 
         async function saveChartOnline() {
             if (!window.firebase || !window.firebase.currentUserId()) {
-                showConfirmationModal("You need to be signed in to save charts online.", () => {}, true);
+                showConfirmationModal("You must be signed in to save charts online.", () => {}, true);
                 return;
             }
 
@@ -1499,10 +1567,8 @@
                 return;
             }
 
-            // Create a deep copy to avoid modifying the live chartData object
             const dataToSave = {
                 name: chartName,
-                // Stringify chartData to handle nested arrays for Firestore
                 chartData: JSON.stringify(chartData), 
                 chartConfig: chartConfig,
                 dataTitles: {
@@ -1527,13 +1593,13 @@
 
         async function loadChartsOnline() {
             if (!window.firebase || !window.firebase.currentUserId()) {
-                showConfirmationModal("You need to be signed in to load charts online.", () => {}, true);
+                showConfirmationModal("You must be signed in to load charts online.", () => {}, true);
                 return;
             }
 
             showLoading("Loading charts...");
             const savedChartsList = document.getElementById('saved-charts-list');
-            savedChartsList.innerHTML = ''; // Clear previous list
+            savedChartsList.innerHTML = ''; 
 
             try {
                 const chartsCollectionRef = window.firebase.collection(window.firebase.db, `artifacts/${window.firebase.appId}/users/${window.firebase.currentUserId()}/charts`);
@@ -1547,7 +1613,6 @@
                         charts.push({ id: doc.id, ...doc.data() });
                     });
 
-                    // Sort charts by timestamp, newest first
                     charts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
                     charts.forEach((chart) => {
@@ -1569,7 +1634,7 @@
 
                     savedChartsList.querySelectorAll('.delete-single-chart-btn').forEach(button => {
                         button.onclick = (event) => {
-                            event.stopPropagation(); // Prevent li click
+                            event.stopPropagation(); 
                             const chartId = event.currentTarget.closest('li').dataset.chartId;
                             const chartName = event.currentTarget.closest('li').querySelector('.chart-name').textContent;
                             showConfirmationModal(`Are you sure you want to delete "${chartName}"?`, () => deleteSingleChart(chartId));
@@ -1595,7 +1660,6 @@
 
                 if (docSnap.exists()) {
                     const chartDataLoaded = docSnap.data();
-                    // Parse the stringified chartData back into an object
                     chartData = JSON.parse(chartDataLoaded.chartData); 
                     chartConfig = chartDataLoaded.chartConfig;
                     document.getElementById('row-title-input').value = chartDataLoaded.dataTitles.row;
@@ -1618,14 +1682,13 @@
         }
 
         async function deleteSingleChart(chartId) {
-            hideModal(confirmationModal); // Hide confirmation modal first
+            hideModal(confirmationModal); 
             showLoading("Deleting chart...");
 
             try {
                 const chartDocRef = window.firebase.doc(window.firebase.db, `artifacts/${window.firebase.appId}/users/${window.firebase.currentUserId()}/charts`, chartId);
                 await window.firebase.deleteDoc(chartDocRef);
-                // No confirmation modal on success, just refresh the list
-                loadChartsOnline(); // Refresh the list
+                loadChartsOnline(); 
             } catch (e) {
                 console.error("Error deleting chart: ", e);
                 showConfirmationModal("Error deleting chart: " + e.message, () => {}, true);
@@ -1664,6 +1727,10 @@
                 drawMekkoChart();
             });
             document.addEventListener('mouseup', () => { isResizing = false; document.body.style.cursor = ''; });
+
+            // Auth buttons
+            document.getElementById('sign-in-btn').addEventListener('click', () => window.signInWithGoogle());
+            // The sign-out button uses an inline onclick handler, which is also fine.
 
             // Local Save/Load
             document.getElementById('save-data-btn').addEventListener('click', () => {
@@ -1823,18 +1890,6 @@
         }
 
         window.onload = () => {
-            // Wait for Firebase to initialize before doing anything that depends on it.
-            const checkFirebase = setInterval(() => {
-                if (window.firebase) {
-                    clearInterval(checkFirebase);
-                    // Now that Firebase is ready, enable the buttons
-                    const saveBtn = document.getElementById('save-chart-online-btn');
-                    const loadBtn = document.getElementById('load-chart-online-btn');
-                    if(saveBtn) saveBtn.disabled = false;
-                    if(loadBtn) loadBtn.disabled = false;
-                }
-            }, 100);
-
             document.querySelectorAll('.sidebar-accordion details').forEach(detail => {
                 detail.removeAttribute('open');
             });
