@@ -7,7 +7,7 @@
     <meta name="description" content="Generate Mekko charts quickly with free tool at mekkochart.vercel.app. Customize colors, formatting, and sizes for data visualizations.">
     <meta name="keywords" content="Mekko chart, chart generator, data visualization, custom charts, free chart tool">
     <meta name="author" content="Andrius Varanavicius">
-    <meta name="application-version" content="0.15.0">
+    <meta name="application-version" content="0.16.0">
     <meta name="robots" content="index, follow">
     <meta property="og:title" content="Mekko Chart Generator - Create Custom Charts">
     <meta property="og:description" content="Easily create and customize Mekko charts with our free online tool at mekkochart.vercel.app. Perfect for data visualization.">
@@ -29,7 +29,7 @@
       "description": "A free online tool to create and customize Mekko charts for data visualization.",
       "applicationCategory": "Data Visualization Tool",
       "operatingSystem": "Web",
-      "softwareVersion": "0.15.0",
+      "softwareVersion": "0.16.0",
       "url": "https://mekkochart.vercel.app/",
       "offers": {
         "@type": "Offer",
@@ -1267,16 +1267,20 @@
                         rowLabel: rowLabel, colLabel: colLabel,
                         rowIndex: j, colIndex: i
                     };
+                    
+                    // *** BUG FIX: Replaced complex y/height calculation with a clearer, more direct method ***
                     if (chartConfig.yAxisScaleType === 'percentage') {
-                        segment.y = colTotal > 0 ? y(accumulatedYValue / colTotal) : y(0);
-                        segment.height = colTotal > 0 ? height - y(value / colTotal) : 0;
-                        segment.y -= segment.height;
+                        const startPercent = accumulatedYValue / colTotal;
+                        const endPercent = (accumulatedYValue + value) / colTotal;
+                        segment.y = colTotal > 0 ? y(endPercent) : y(0);
+                        segment.height = colTotal > 0 ? y(startPercent) - y(endPercent) : 0;
                         segment.displayValue = colTotal > 0 ? (value / colTotal) * 100 : 0;
                     } else {
                         segment.y = y(accumulatedYValue + value);
                         segment.height = y(accumulatedYValue) - y(accumulatedYValue + value);
                         segment.displayValue = value;
                     }
+
                     accumulatedYValue += value;
                     return segment;
                 });
@@ -1326,15 +1330,16 @@
                 // Vertical drag for segment heights
                 if (chartConfig.yAxisScaleType === 'percentage') {
                     columnGroups.each(function(d_col) {
+                        // *** BUG FIX: Correctly calculate handle `y` position using the new segment logic ***
                         const handleData = d_col.segments.slice(0, -1).map(segment => ({
                             colIndex: segment.colIndex, rowIndex: segment.rowIndex, 
-                            x: segment.x, y: segment.y + segment.height, width: segment.width
+                            x: segment.x, y: segment.y, width: segment.width
                         }));
 
                         d3.select(this).selectAll('.vertical-drag-handle')
                             .data(handleData).enter().append('rect')
                             .attr('class', 'vertical-drag-handle')
-                            .attr('x', h => h.x).attr('y', h => h.y - 2)
+                            .attr('x', h => h.x).attr('y', h => h.y - 2) // Center the 4px handle on the line
                             .attr('width', h => h.width).attr('height', 4)
                             .call(d3.drag().on("drag", handleVerticalDrag));
                     });
