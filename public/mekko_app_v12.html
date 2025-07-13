@@ -133,7 +133,7 @@
 
                     userProfile.classList.add('hidden');
                     signInBtn.classList.remove('hidden');
-                    signOutBtn.add('hidden');
+                    signOutBtn.classList.add('hidden');
                     userIdDisplay.textContent = "Signed Out";
 
                     onlineButtons.forEach(btn => {
@@ -212,6 +212,7 @@
             flex-shrink: 0;
             z-index: 10;
             position: relative;
+            overflow: hidden; /* This will clip content when sidebar is collapsed */
         }
         
         #sidebar-content-wrapper {
