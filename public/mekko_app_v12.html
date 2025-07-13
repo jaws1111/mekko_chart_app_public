@@ -7,7 +7,7 @@
     <meta name="description" content="Generate Mekko charts quickly with free tool at mekkochart.vercel.app. Customize colors, formatting, and sizes for data visualizations.">
     <meta name="keywords" content="Mekko chart, chart generator, data visualization, custom charts, free chart tool">
     <meta name="author" content="Andrius Varanavicius">
-    <meta name="application-version" content="0.20.0">
+    <meta name="application-version" content="0.21.0">
     <meta name="robots" content="index, follow">
     <meta property="og:title" content="Mekko Chart Generator - Create Custom Charts">
     <meta property="og:description" content="Easily create and customize Mekko charts with our free online tool at mekkochart.vercel.app. Perfect for data visualization.">
@@ -29,7 +29,7 @@
       "description": "A free online tool to create and customize Mekko charts for data visualization.",
       "applicationCategory": "Data Visualization Tool",
       "operatingSystem": "Web",
-      "softwareVersion": "0.20.0",
+      "softwareVersion": "0.21.0",
       "url": "https://mekkochart.vercel.app/",
       "offers": {
         "@type": "Offer",
@@ -861,9 +861,10 @@
                             <summary>Labels & Legend <span class="accordion-icon">&gt;</span></summary>
                             <div class="accordion-content space-y-4 pt-4">
                                  <div class="space-y-2">
-                                    <label class="sidebar-label">Column Labels (X-Axis):</label>
+                                    <label class="sidebar-label">Value Labels:</label>
                                     <label class="flex items-center"><input type="checkbox" id="show-column-totals" class="form-checkbox"><span class="ml-2 text-sm">Show Column Totals</span></label>
                                     <label class="flex items-center"><input type="checkbox" id="abbreviate-totals-checkbox" class="form-checkbox"><span class="ml-2 text-sm">Abbreviate Totals (k, m, b)</span></label>
+                                    <label class="flex items-center"><input type="checkbox" id="show-grand-total-checkbox" class="form-checkbox"><span class="ml-2 text-sm">Show Grand Total</span></label>
                                 </div>
                                 <div class="space-y-2">
                                     <label class="sidebar-label">Segment Data Labels:</label>
@@ -911,6 +912,7 @@
                                             </div>
                                         </div>
                                         <label class="flex items-center"><input type="checkbox" id="show-legend-title-checkbox" class="form-checkbox"><span class="ml-2 text-sm">Show Legend Title</span></label>
+                                        <label class="flex items-center"><input type="checkbox" id="show-legend-totals-checkbox" class="form-checkbox"><span class="ml-2 text-sm">Show Row Totals in Legend</span></label>
                                     </div>
                                 </div>
                             </div>
@@ -1093,7 +1095,9 @@
             showXAxisLabels: true,
             showYAxisLabels: true,
             showXAxisTitle: true,
-            showYAxisTitle: true
+            showYAxisTitle: true,
+            showGrandTotal: true,
+            showLegendTotals: true,
         };
 
         const themes = {
@@ -1309,7 +1313,8 @@
                 'show-data-labels': 'showDataLabels', 'show-gridlines': 'showGridlines', 'show-column-totals': 'showColumnTotals',
                 'abbreviate-totals-checkbox': 'abbreviateTotals', 'show-x-axis-labels-checkbox': 'showXAxisLabels',
                 'show-y-axis-labels-checkbox': 'showYAxisLabels', 'show-x-axis-title-checkbox': 'showXAxisTitle',
-                'show-y-axis-title-checkbox': 'showYAxisTitle', 'show-legend-title-checkbox': 'showLegendTitle'
+                'show-y-axis-title-checkbox': 'showYAxisTitle', 'show-legend-title-checkbox': 'showLegendTitle',
+                'show-grand-total-checkbox': 'showGrandTotal', 'show-legend-totals-checkbox': 'showLegendTotals'
             };
 
             Object.entries(configMap).forEach(([id, key]) => {
@@ -1385,6 +1390,7 @@
             const g = chartSvg.append('g').attr('transform', `translate(${chartContentMargin.left},${chartContentMargin.top})`);
 
             const columnTotals = chartData.columnLabels.map((_, i) => d3.sum(chartData.values, d => d[i]));
+            const rowTotals = chartData.values.map(row => d3.sum(row));
             const overallTotal = d3.sum(columnTotals);
 
             if (overallTotal === 0) {
@@ -1539,7 +1545,15 @@
                 
                 const legendItems = legend.selectAll('.legend-item').data(chartData.rowLabels).enter().append('g').attr('class', 'legend-item');
                 legendItems.append('rect').attr('width', legendRectSize).attr('height', legendRectSize).attr('fill', d => color(d)).attr('stroke', chartConfig.borderColor);
-                legendItems.append('text').attr('x', legendTextOffset).attr('y', legendRectSize/2).attr('dy', '0.35em').text(d => d).attr('font-size', `${legendFs}px`);
+                legendItems.append('text').attr('x', legendTextOffset).attr('y', legendRectSize/2).attr('dy', '0.35em').attr('font-size', `${legendFs}px`)
+                    .text((d, i) => {
+                        if (chartConfig.showLegendTotals) {
+                            const total = rowTotals[i];
+                            const totalStr = chartConfig.abbreviateTotals ? d3.format(".2s")(total).replace(/G/,'B') : total.toLocaleString();
+                            return `${d} (${totalStr})`;
+                        }
+                        return d;
+                    });
                 
                 if (chartConfig.legendPlacement === 'right') {
                     legend.select('.legend-title').attr('transform', `translate(${chartContentMargin.left + width + legendPadding}, ${chartContentMargin.top})`);
@@ -1565,6 +1579,20 @@
                         return transform;
                     });
                 }
+            }
+
+            if (chartConfig.showGrandTotal) {
+                const totalStr = chartConfig.abbreviateTotals ? d3.format(".2s")(overallTotal).replace(/G/,'B') : overallTotal.toLocaleString();
+                chartSvg.append('text')
+                    .attr('class', 'grand-total')
+                    .attr('x', currentSvgWidth - 15)
+                    .attr('y', currentSvgHeight - 15)
+                    .attr('text-anchor', 'end')
+                    .attr('font-family', chartConfig.fontFamily)
+                    .attr('font-size', `${chartConfig.fontSize}px`)
+                    .attr('font-weight', 'bold')
+                    .attr('fill', chartConfig.fontColor)
+                    .text(`Grand Total: ${totalStr}`);
             }
         }
         
@@ -1976,7 +2004,8 @@
                     'abbreviate-totals-checkbox': 'abbreviateTotals', 'show-x-axis-labels-checkbox': 'showXAxisLabels',
                     'show-y-axis-labels-checkbox': 'showYAxisLabels', 'show-x-axis-title-checkbox': 'showXAxisTitle',
                     'show-y-axis-title-checkbox': 'showYAxisTitle', 'segment-colors': 'segmentColors',
-                    'show-legend-title-checkbox': 'showLegendTitle'
+                    'show-legend-title-checkbox': 'showLegendTitle',
+                    'show-grand-total-checkbox': 'showGrandTotal', 'show-legend-totals-checkbox': 'showLegendTotals'
                 };
                 
                 if (configMap[targetId]) {
