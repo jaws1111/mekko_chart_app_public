@@ -7,7 +7,7 @@
     <meta name="description" content="Generate Mekko charts quickly with free tool at mekkochart.vercel.app. Customize colors, formatting, and sizes for data visualizations.">
     <meta name="keywords" content="Mekko chart, chart generator, data visualization, custom charts, free chart tool">
     <meta name="author" content="Andrius Varanavicius">
-    <meta name="application-version" content="0.22.0">
+    <meta name="application-version" content="0.20.0">
     <meta name="robots" content="index, follow">
     <meta property="og:title" content="Mekko Chart Generator - Create Custom Charts">
     <meta property="og:description" content="Easily create and customize Mekko charts with our free online tool at mekkochart.vercel.app. Perfect for data visualization.">
@@ -29,7 +29,7 @@
       "description": "A free online tool to create and customize Mekko charts for data visualization.",
       "applicationCategory": "Data Visualization Tool",
       "operatingSystem": "Web",
-      "softwareVersion": "0.22.0",
+      "softwareVersion": "0.20.0",
       "url": "https://mekkochart.vercel.app/",
       "offers": {
         "@type": "Offer",
@@ -861,10 +861,9 @@
                             <summary>Labels & Legend <span class="accordion-icon">&gt;</span></summary>
                             <div class="accordion-content space-y-4 pt-4">
                                  <div class="space-y-2">
-                                    <label class="sidebar-label">Value Labels:</label>
+                                    <label class="sidebar-label">Column Labels (X-Axis):</label>
                                     <label class="flex items-center"><input type="checkbox" id="show-column-totals" class="form-checkbox"><span class="ml-2 text-sm">Show Column Totals</span></label>
                                     <label class="flex items-center"><input type="checkbox" id="abbreviate-totals-checkbox" class="form-checkbox"><span class="ml-2 text-sm">Abbreviate Totals (k, m, b)</span></label>
-                                    <label class="flex items-center"><input type="checkbox" id="show-grand-total-checkbox" class="form-checkbox"><span class="ml-2 text-sm">Show Grand Total</span></label>
                                 </div>
                                 <div class="space-y-2">
                                     <label class="sidebar-label">Segment Data Labels:</label>
@@ -1797,7 +1796,7 @@
 
             try {
                 const prefsDocRef = window.firebase.doc(window.firebase.db, `artifacts/${window.firebase.appId}/users/${window.firebase.currentUserId()}/preferences`, 'userPrefs');
-                await window.firebase.setDoc(prefs, { merge: true });
+                await window.firebase.setDoc(prefsDocRef, prefs, { merge: true });
                 console.log("User preferences saved.");
             } catch (e) {
                 console.error("Error saving user preferences:", e);
@@ -1905,6 +1904,29 @@
                 e.target.value = '';
             });
             
+            document.getElementById('save-chart-online-btn').addEventListener('click', saveChartOnline);
+            document.getElementById('load-chart-online-btn').addEventListener('click', loadChartsOnline);
+            document.getElementById('save-chart-confirm-btn').addEventListener('click', confirmSaveChartOnline);
+            document.getElementById('save-chart-cancel-btn').addEventListener('click', () => hideModal(saveChartModal));
+            document.getElementById('save-chart-modal-close-btn').addEventListener('click', () => hideModal(saveChartModal));
+            document.getElementById('load-chart-modal-close-btn').addEventListener('click', () => hideModal(loadChartModal));
+
+
+            document.getElementById('delete-all-data-btn').addEventListener('click', () => {
+                showConfirmationModal('Are you sure you want to delete all data? This cannot be undone.', () => {
+                    chartData = {
+                        columnLabels: ['Category 1'],
+                        rowLabels: ['Segment 1'],
+                        values: [[0]]
+                    };
+                    renderDataGrid('sidebar-grid-container');
+                    if (dataGridModal.classList.contains('visible')) {
+                        renderDataGrid('modal-grid-container');
+                    }
+                    drawMekkoChart();
+                });
+            });
+
             document.getElementById('export-png-btn').addEventListener('click', () => {
                 document.getElementById('toggle-sidebar-btn').style.display = 'none';
                 html2canvas(document.getElementById('chart-container')).then(canvas => {
