@@ -7,7 +7,7 @@
     <meta name="description" content="Generate Mekko charts quickly with free tool at mekkochart.vercel.app. Customize colors, formatting, and sizes for data visualizations.">
     <meta name="keywords" content="Mekko chart, chart generator, data visualization, custom charts, free chart tool">
     <meta name="author" content="Andrius Varanavicius">
-    <meta name="application-version" content="0.22.0">
+    <meta name="application-version" content="0.21.0">
     <meta name="robots" content="index, follow">
     <meta property="og:title" content="Mekko Chart Generator - Create Custom Charts">
     <meta property="og:description" content="Easily create and customize Mekko charts with our free online tool at mekkochart.vercel.app. Perfect for data visualization.">
@@ -29,7 +29,7 @@
       "description": "A free online tool to create and customize Mekko charts for data visualization.",
       "applicationCategory": "Data Visualization Tool",
       "operatingSystem": "Web",
-      "softwareVersion": "0.22.0",
+      "softwareVersion": "0.21.0",
       "url": "https://mekkochart.vercel.app/",
       "offers": {
         "@type": "Offer",
@@ -868,15 +868,7 @@
                                 </div>
                                 <div class="space-y-2">
                                     <label class="sidebar-label">Segment Data Labels:</label>
-                                    <div>
-                                        <label for="label-content-type" class="sidebar-label text-sm">Label Content:</label>
-                                        <select id="label-content-type" class="sidebar-select">
-                                            <option value="none">None</option>
-                                            <option value="percentage">Percentage</option>
-                                            <option value="value">Absolute Value</option>
-                                            <option value="both">Both</option>
-                                        </select>
-                                    </div>
+                                    <label class="flex items-center"><input type="checkbox" id="show-data-labels" class="form-checkbox"><span class="ml-2 text-sm">Show Data Labels</span></label>
                                      <div>
                                         <label for="label-precision" class="sidebar-label text-sm">Decimal Places:</label>
                                         <input type="number" id="label-precision" class="sidebar-input" value="0" min="0" max="5">
@@ -1092,7 +1084,7 @@
             rowTitleFontSize: 14,
             columnTitleFontSize: 14,
             dataTitleFontSize: 14,
-            labelContentType: 'percentage', // 'none', 'percentage', 'value', 'both'
+            showDataLabels: true,
             labelPrecision: 0,
             showGridlines: false, 
             yAxisTicks: 5,
@@ -1318,7 +1310,7 @@
                 'chart-title': 'chartTitle', 'background-color': 'backgroundColor', 'border-color': 'borderColor',
                 'font-family': 'fontFamily', 'font-size': 'fontSize', 'font-color': 'fontColor', 'legend-font-size': 'legendFontSize',
                 'label-precision': 'labelPrecision', 'y-axis-ticks': 'yAxisTicks', 'legend-placement': 'legendPlacement',
-                'label-content-type': 'labelContentType', 'show-gridlines': 'showGridlines', 'show-column-totals': 'showColumnTotals',
+                'show-data-labels': 'showDataLabels', 'show-gridlines': 'showGridlines', 'show-column-totals': 'showColumnTotals',
                 'abbreviate-totals-checkbox': 'abbreviateTotals', 'show-x-axis-labels-checkbox': 'showXAxisLabels',
                 'show-y-axis-labels-checkbox': 'showYAxisLabels', 'show-x-axis-title-checkbox': 'showXAxisTitle',
                 'show-y-axis-title-checkbox': 'showYAxisTitle', 'show-legend-title-checkbox': 'showLegendTitle',
@@ -1462,49 +1454,13 @@
                     .on('mousemove', (event) => tooltip.style('left', (event.pageX + 15) + 'px').style('top', (event.pageY - 28) + 'px'))
                     .on('mouseout', () => tooltip.classed('visible', false));
             });
-            
-            if (chartConfig.labelContentType !== 'none') {
+
+            if(chartConfig.showDataLabels) {
                 columnGroups.each(function(d) {
-                    const labels = d3.select(this).selectAll('.segment-label')
-                        .data(d.segments)
-                        .enter()
-                        .append('text')
-                        .attr('class', 'segment-label')
-                        .attr('x', s => s.x + s.width / 2)
-                        .attr('y', s => s.y + s.height / 2)
-                        .attr('font-family', chartConfig.fontFamily)
-                        .attr('font-size', `${chartConfig.fontSize * 0.9}px`)
-                        .attr('fill', s => getContrastingTextColor(s.color))
-                        .attr('visibility', 'hidden'); // Initially hidden
-
-                    labels.each(function(s) {
-                        const el = d3.select(this);
-                        const contentType = chartConfig.labelContentType;
-                        const labelFontSize = chartConfig.fontSize * 0.9;
-                        
-                        const showLabel = s.width > 20 && s.height > (contentType === 'both' ? labelFontSize * 2.2 : labelFontSize * 1.2);
-                        if (!showLabel) return;
-                        
-                        el.attr('visibility', 'visible');
-
-                        const percText = `${s.displayValue.toFixed(chartConfig.labelPrecision)}%`;
-                        const valText = chartConfig.abbreviateTotals ? d3.format(".2s")(s.value).replace(/G/,'B') : s.value.toLocaleString();
-
-                        if (contentType === 'percentage') {
-                            el.attr('dy', '0.35em').text(percText);
-                        } else if (contentType === 'value') {
-                            el.attr('dy', '0.35em').text(valText);
-                        } else if (contentType === 'both') {
-                            el.append('tspan')
-                                .attr('x', s.x + s.width / 2)
-                                .attr('dy', '-0.4em')
-                                .text(percText);
-                            el.append('tspan')
-                                .attr('x', s.x + s.width / 2)
-                                .attr('dy', '1.2em')
-                                .text(valText);
-                        }
-                    });
+                    d3.select(this).selectAll('.segment-label').data(d.segments).enter().append('text')
+                        .attr('class', 'segment-label').attr('x', s => s.x + s.width/2).attr('y', s => s.y + s.height/2).attr('dy', '0.35em')
+                        .attr('font-family', chartConfig.fontFamily).attr('font-size', `${chartConfig.fontSize * 0.9}px`).attr('fill', s => getContrastingTextColor(s.color))
+                        .text(s => (s.width > 20 && s.height > 15 && s.displayValue !== 0) ? `${s.displayValue.toFixed(chartConfig.labelPrecision)}${chartConfig.yAxisScaleType === 'percentage' ? '%' : ''}`: '');
                 });
             }
             
@@ -1724,7 +1680,7 @@
             const dataToSave = {
                 name: chartName,
                 chartData: JSON.stringify(chartData), 
-                chartConfig: JSON.stringify(chartConfig), // Stringify config
+                chartConfig: chartConfig,
                 dataTitles: {
                     row: document.getElementById('row-title-input').value,
                     column: document.getElementById('column-title-input').value,
@@ -1813,27 +1769,17 @@
                 const docSnap = await window.firebase.getDoc(chartDocRef);
 
                 if (docSnap.exists()) {
-                    const loaded = docSnap.data();
-                    chartData = JSON.parse(loaded.chartData); 
-                    
-                    // Handle both old (object) and new (string) config formats
-                    let loadedConfig;
-                    if (typeof loaded.chartConfig === 'string') {
-                        loadedConfig = JSON.parse(loaded.chartConfig);
-                    } else {
-                        loadedConfig = loaded.chartConfig; // For backward compatibility
-                    }
-                    
-                    chartConfig = { ...defaultChartConfig, ...loadedConfig };
-
-                    document.getElementById('row-title-input').value = loaded.dataTitles.row;
-                    document.getElementById('column-title-input').value = loaded.dataTitles.column;
-                    document.getElementById('data-title-input').value = loaded.dataTitles.data;
+                    const chartDataLoaded = docSnap.data();
+                    chartData = JSON.parse(chartDataLoaded.chartData); 
+                    chartConfig = chartDataLoaded.chartConfig;
+                    document.getElementById('row-title-input').value = chartDataLoaded.dataTitles.row;
+                    document.getElementById('column-title-input').value = chartDataLoaded.dataTitles.column;
+                    document.getElementById('data-title-input').value = chartDataLoaded.dataTitles.data;
 
                     renderDataGrid('sidebar-grid-container');
                     initializeConfigInputs();
                     drawMekkoChart();
-                    showConfirmationModal(`Chart "${loaded.name}" loaded successfully!`, () => {}, true);
+                    showConfirmationModal(`Chart "${chartDataLoaded.name}" loaded successfully!`, () => {}, true);
                 } else {
                     showConfirmationModal("Chart not found.", () => {}, true);
                 }
@@ -1878,7 +1824,7 @@
 
             try {
                 const prefsDocRef = window.firebase.doc(window.firebase.db, `artifacts/${window.firebase.appId}/users/${window.firebase.currentUserId()}/preferences`, 'userPrefs');
-                await window.firebase.setDoc(prefsDocRef, { chartConfig: JSON.stringify(prefs.chartConfig), sidebarFontSize: prefs.sidebarFontSize, lastUpdated: prefs.lastUpdated }, { merge: true });
+                await window.firebase.setDoc(prefsDocRef, prefs, { merge: true });
                 console.log("User preferences saved.");
             } catch (e) {
                 console.error("Error saving user preferences:", e);
@@ -1894,14 +1840,7 @@
 
                 if (docSnap.exists()) {
                     const prefs = docSnap.data();
-                    let loadedConfig;
-                    if(typeof prefs.chartConfig === 'string') {
-                        loadedConfig = JSON.parse(prefs.chartConfig);
-                    } else {
-                        loadedConfig = prefs.chartConfig;
-                    }
-                    chartConfig = { ...defaultChartConfig, ...loadedConfig };
-
+                    chartConfig = { ...defaultChartConfig, ...prefs.chartConfig };
                     if (prefs.sidebarFontSize) {
                         document.documentElement.style.setProperty('--sidebar-base-font-size', prefs.sidebarFontSize);
                     }
@@ -2071,7 +2010,7 @@
                     'chart-title': 'chartTitle', 'background-color': 'backgroundColor', 'border-color': 'borderColor',
                     'font-family': 'fontFamily', 'font-color': 'fontColor', 'legend-font-size': 'legendFontSize',
                     'label-precision': 'labelPrecision', 'y-axis-ticks': 'yAxisTicks', 'legend-placement': 'legendPlacement',
-                    'label-content-type': 'labelContentType', 'show-gridlines': 'showGridlines', 'show-column-totals': 'showColumnTotals',
+                    'show-data-labels': 'showDataLabels', 'show-gridlines': 'showGridlines', 'show-column-totals': 'showColumnTotals',
                     'abbreviate-totals-checkbox': 'abbreviateTotals', 'show-x-axis-labels-checkbox': 'showXAxisLabels',
                     'show-y-axis-labels-checkbox': 'showYAxisLabels', 'show-x-axis-title-checkbox': 'showXAxisTitle',
                     'show-y-axis-title-checkbox': 'showYAxisTitle', 'segment-colors': 'segmentColors',
