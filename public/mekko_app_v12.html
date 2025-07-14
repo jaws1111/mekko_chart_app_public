@@ -7,7 +7,7 @@
     <meta name="description" content="Generate Mekko charts quickly with free tool at mekkochart.vercel.app. Customize colors, formatting, and sizes for data visualizations.">
     <meta name="keywords" content="Mekko chart, chart generator, data visualization, custom charts, free chart tool">
     <meta name="author" content="Andrius Varanavicius">
-    <meta name="application-version" content="0.20.0">
+    <meta name="application-version" content="0.21.0">
     <meta name="robots" content="index, follow">
     <meta property="og:title" content="Mekko Chart Generator - Create Custom Charts">
     <meta property="og:description" content="Easily create and customize Mekko charts with our free online tool at mekkochart.vercel.app. Perfect for data visualization.">
@@ -29,7 +29,7 @@
       "description": "A free online tool to create and customize Mekko charts for data visualization.",
       "applicationCategory": "Data Visualization Tool",
       "operatingSystem": "Web",
-      "softwareVersion": "0.20.0",
+      "softwareVersion": "0.21.0",
       "url": "https://mekkochart.vercel.app/",
       "offers": {
         "@type": "Offer",
@@ -367,6 +367,7 @@
         .axis-title { font-weight: 600; text-anchor: middle; }
         .legend-item { cursor: pointer; }
         .legend-title { font-weight: bold; }
+        .column-total-sum { font-weight: bold; text-anchor: end; }
         
         .horizontal-drag-handle {
             cursor: ew-resize;
@@ -844,6 +845,7 @@
                                      <label class="flex items-center"><input type="checkbox" id="show-y-axis-labels-checkbox" class="form-checkbox"><span class="ml-2 text-sm">Y-Axis Labels</span></label>
                                      <label class="flex items-center"><input type="checkbox" id="show-x-axis-title-checkbox" class="form-checkbox"><span class="ml-2 text-sm">X-Axis Title</span></label>
                                      <label class="flex items-center"><input type="checkbox" id="show-y-axis-title-checkbox" class="form-checkbox"><span class="ml-2 text-sm">Y-Axis Title</span></label>
+                                     <label class="flex items-center"><input type="checkbox" id="show-column-total-sum-checkbox" class="form-checkbox"><span class="ml-2 text-sm">Show Grand Total</span></label>
                                 </div>
                                 <div class="space-y-2">
                                     <label class="sidebar-label">Gridlines:</label>
@@ -868,6 +870,14 @@
                                 <div class="space-y-2">
                                     <label class="sidebar-label">Segment Data Labels:</label>
                                     <label class="flex items-center"><input type="checkbox" id="show-data-labels" class="form-checkbox"><span class="ml-2 text-sm">Show Data Labels</span></label>
+                                     <div>
+                                        <label for="data-label-type" class="sidebar-label text-sm">Label Type:</label>
+                                        <select id="data-label-type" class="sidebar-select">
+                                            <option value="percentage">Percentage (%)</option>
+                                            <option value="value">Value</option>
+                                            <option value="both">Both</option>
+                                        </select>
+                                    </div>
                                      <div>
                                         <label for="label-precision" class="sidebar-label text-sm">Decimal Places:</label>
                                         <input type="number" id="label-precision" class="sidebar-input" value="0" min="0" max="5">
@@ -911,6 +921,7 @@
                                             </div>
                                         </div>
                                         <label class="flex items-center"><input type="checkbox" id="show-legend-title-checkbox" class="form-checkbox"><span class="ml-2 text-sm">Show Legend Title</span></label>
+                                        <label class="flex items-center"><input type="checkbox" id="show-legend-category-totals-checkbox" class="form-checkbox"><span class="ml-2 text-sm">Show Category Totals in Legend</span></label>
                                     </div>
                                 </div>
                             </div>
@@ -1083,13 +1094,16 @@
             columnTitleFontSize: 14,
             dataTitleFontSize: 14,
             showDataLabels: true,
+            dataLabelType: 'percentage', // New: 'percentage', 'value', or 'both'
             labelPrecision: 0,
             showGridlines: false, 
             yAxisTicks: 5,
             showColumnTotals: true,
+            showColumnTotalSum: true, // New
             abbreviateTotals: true,
             legendPlacement: 'right',
             showLegendTitle: true,
+            showLegendCategoryTotals: true, // New
             showXAxisLabels: true,
             showYAxisLabels: true,
             showXAxisTitle: true,
@@ -1306,10 +1320,12 @@
                 'chart-title': 'chartTitle', 'background-color': 'backgroundColor', 'border-color': 'borderColor',
                 'font-family': 'fontFamily', 'font-size': 'fontSize', 'font-color': 'fontColor', 'legend-font-size': 'legendFontSize',
                 'label-precision': 'labelPrecision', 'y-axis-ticks': 'yAxisTicks', 'legend-placement': 'legendPlacement',
+                'data-label-type': 'dataLabelType',
                 'show-data-labels': 'showDataLabels', 'show-gridlines': 'showGridlines', 'show-column-totals': 'showColumnTotals',
                 'abbreviate-totals-checkbox': 'abbreviateTotals', 'show-x-axis-labels-checkbox': 'showXAxisLabels',
                 'show-y-axis-labels-checkbox': 'showYAxisLabels', 'show-x-axis-title-checkbox': 'showXAxisTitle',
-                'show-y-axis-title-checkbox': 'showYAxisTitle', 'show-legend-title-checkbox': 'showLegendTitle'
+                'show-y-axis-title-checkbox': 'showYAxisTitle', 'show-legend-title-checkbox': 'showLegendTitle',
+                'show-column-total-sum-checkbox': 'showColumnTotalSum', 'show-legend-category-totals-checkbox': 'showLegendCategoryTotals'
             };
 
             Object.entries(configMap).forEach(([id, key]) => {
@@ -1365,10 +1381,20 @@
                 legendTitleHeight = chartConfig.rowTitleFontSize * 1.5;
             }
 
+            const rowTotals = chartData.rowLabels.map((_, i) => d3.sum(chartData.values[i]));
+
             if (chartData.rowLabels.length > 0 && chartConfig.legendPlacement !== 'none') {
-                const estimateTextWidth = text => text.length * (legendFs * 0.6); 
+                const estimateTextWidth = (text, rowIndex) => {
+                    let totalStr = '';
+                    if (chartConfig.showLegendCategoryTotals) {
+                        const total = rowTotals[rowIndex];
+                        totalStr = ` (${chartConfig.abbreviateTotals ? d3.format(".2s")(total).replace(/G/,'B') : total.toLocaleString()})`;
+                    }
+                    return (text + totalStr).length * (legendFs * 0.6);
+                }
+
                 if (chartConfig.legendPlacement === 'right') {
-                    const maxTextWidth = d3.max(chartData.rowLabels, d => estimateTextWidth(d));
+                    const maxTextWidth = d3.max(chartData.rowLabels, (d, i) => estimateTextWidth(d, i));
                     chartContentMargin.right += legendRectSize + legendTextOffset + maxTextWidth + legendPadding;
                 } else {
                     const legendHeight = Math.ceil(chartData.rowLabels.length / 5) * legendLineHeight + legendPadding + legendTitleHeight;
@@ -1410,7 +1436,8 @@
                         value: value, x: currentX, width: colWidth,
                         color: color(rowLabel),
                         rowLabel: rowLabel, colLabel: colLabel,
-                        rowIndex: j, colIndex: i
+                        rowIndex: j, colIndex: i,
+                        percentage: colTotal > 0 ? (value / colTotal) * 100 : 0
                     };
                     
                     if (chartConfig.yAxisScaleType === 'percentage') {
@@ -1418,11 +1445,9 @@
                         const endPercent = colTotal > 0 ? (accumulatedYValue + value) / colTotal : 0;
                         segment.y = y(endPercent);
                         segment.height = y(startPercent) - y(endPercent);
-                        segment.displayValue = colTotal > 0 ? (value / colTotal) * 100 : 0;
                     } else {
                         segment.y = y(accumulatedYValue + value);
                         segment.height = y(accumulatedYValue) - y(accumulatedYValue + value);
-                        segment.displayValue = value;
                     }
 
                     accumulatedYValue += value;
@@ -1442,8 +1467,9 @@
                     .attr('fill', s => s.color).attr('stroke', chartConfig.borderColor).attr('stroke-width', 1.5).attr('rx', 4)
                     .on('mouseover', (event, s) => {
                         tooltip.classed('visible', true);
-                        let valueText = chartConfig.yAxisScaleType === 'percentage' ? `${s.displayValue.toFixed(chartConfig.labelPrecision)}%` : s.value.toLocaleString();
-                        tooltip.html(`<strong>${s.colLabel}</strong><br>${s.rowLabel}: ${valueText}`);
+                        let valueText = s.value.toLocaleString(undefined, { maximumFractionDigits: chartConfig.labelPrecision });
+                        let percentText = `${s.percentage.toFixed(chartConfig.labelPrecision)}%`;
+                        tooltip.html(`<strong>${s.colLabel}</strong><br>${s.rowLabel}: ${valueText} (${percentText})`);
                     })
                     .on('mousemove', (event) => tooltip.style('left', (event.pageX + 15) + 'px').style('top', (event.pageY - 28) + 'px'))
                     .on('mouseout', () => tooltip.classed('visible', false));
@@ -1454,7 +1480,17 @@
                     d3.select(this).selectAll('.segment-label').data(d.segments).enter().append('text')
                         .attr('class', 'segment-label').attr('x', s => s.x + s.width/2).attr('y', s => s.y + s.height/2).attr('dy', '0.35em')
                         .attr('font-family', chartConfig.fontFamily).attr('font-size', `${chartConfig.fontSize * 0.9}px`).attr('fill', s => getContrastingTextColor(s.color))
-                        .text(s => (s.width > 20 && s.height > 15 && s.displayValue !== 0) ? `${s.displayValue.toFixed(chartConfig.labelPrecision)}${chartConfig.yAxisScaleType === 'percentage' ? '%' : ''}`: '');
+                        .text(s => {
+                            if (s.width < 20 || s.height < 15 || s.value === 0) return '';
+                            const valueStr = s.value.toLocaleString(undefined, { maximumFractionDigits: chartConfig.labelPrecision });
+                            const percentStr = `${s.percentage.toFixed(chartConfig.labelPrecision)}%`;
+                            switch(chartConfig.dataLabelType) {
+                                case 'value': return valueStr;
+                                case 'percentage': return percentStr;
+                                case 'both': return `${valueStr} (${percentStr})`;
+                                default: return '';
+                            }
+                        });
                 });
             }
             
@@ -1508,6 +1544,18 @@
                     .attr('class', 'column-label').attr('x', d => d.x).attr('y', d => d.y).attr('font-family', chartConfig.fontFamily).attr('font-size', `${chartConfig.fontSize}px`).attr('fill', chartConfig.fontColor).text(d => d.text);
             }
 
+            if (chartConfig.showColumnTotalSum) {
+                const totalSumStr = `Total: ${chartConfig.abbreviateTotals ? d3.format(".3s")(overallTotal).replace(/G/,'B') : overallTotal.toLocaleString()}`;
+                g.append('text')
+                    .attr('class', 'column-total-sum')
+                    .attr('x', width)
+                    .attr('y', height + chartContentMargin.bottom * 0.9)
+                    .attr('font-family', chartConfig.fontFamily)
+                    .attr('font-size', `${chartConfig.fontSize}px`)
+                    .attr('fill', chartConfig.fontColor)
+                    .text(totalSumStr);
+            }
+
             chartSvg.append('text').attr('class', 'chart-title').attr('x', chartContentMargin.left + width/2).attr('y', chartContentMargin.top / 2).attr('font-family', chartConfig.fontFamily).attr('font-size', `${chartConfig.chartTitleFontSize}px`).attr('fill', chartConfig.fontColor).text(chartConfig.chartTitle);
             if (chartConfig.showYAxisTitle) {
                 g.append('text').attr('class', 'axis-title').attr('transform', 'rotate(-90)').attr('y', -chartContentMargin.left * 0.75).attr('x', -height/2).attr('font-family', chartConfig.fontFamily).attr('font-size', `${chartConfig.dataTitleFontSize}px`).attr('fill', chartConfig.fontColor).text(document.getElementById('data-title-input').value || 'Value');
@@ -1539,7 +1587,20 @@
                 
                 const legendItems = legend.selectAll('.legend-item').data(chartData.rowLabels).enter().append('g').attr('class', 'legend-item');
                 legendItems.append('rect').attr('width', legendRectSize).attr('height', legendRectSize).attr('fill', d => color(d)).attr('stroke', chartConfig.borderColor);
-                legendItems.append('text').attr('x', legendTextOffset).attr('y', legendRectSize/2).attr('dy', '0.35em').text(d => d).attr('font-size', `${legendFs}px`);
+                legendItems.append('text')
+                    .attr('x', legendTextOffset)
+                    .attr('y', legendRectSize/2)
+                    .attr('dy', '0.35em')
+                    .text((d, i) => {
+                        let text = d;
+                        if (chartConfig.showLegendCategoryTotals) {
+                            const total = rowTotals[i];
+                            const totalStr = chartConfig.abbreviateTotals ? d3.format(".2s")(total).replace(/G/,'B') : total.toLocaleString();
+                            text += ` (${totalStr})`;
+                        }
+                        return text;
+                    })
+                    .attr('font-size', `${legendFs}px`);
                 
                 if (chartConfig.legendPlacement === 'right') {
                     legend.select('.legend-title').attr('transform', `translate(${chartContentMargin.left + width + legendPadding}, ${chartContentMargin.top})`);
@@ -1743,7 +1804,7 @@
                 if (docSnap.exists()) {
                     const chartDataLoaded = docSnap.data();
                     chartData = JSON.parse(chartDataLoaded.chartData); 
-                    chartConfig = chartDataLoaded.chartConfig;
+                    chartConfig = { ...defaultChartConfig, ...chartDataLoaded.chartConfig };
                     document.getElementById('row-title-input').value = chartDataLoaded.dataTitles.row;
                     document.getElementById('column-title-input').value = chartDataLoaded.dataTitles.column;
                     document.getElementById('data-title-input').value = chartDataLoaded.dataTitles.data;
@@ -1972,11 +2033,12 @@
                     'chart-title': 'chartTitle', 'background-color': 'backgroundColor', 'border-color': 'borderColor',
                     'font-family': 'fontFamily', 'font-color': 'fontColor', 'legend-font-size': 'legendFontSize',
                     'label-precision': 'labelPrecision', 'y-axis-ticks': 'yAxisTicks', 'legend-placement': 'legendPlacement',
-                    'show-data-labels': 'showDataLabels', 'show-gridlines': 'showGridlines', 'show-column-totals': 'showColumnTotals',
-                    'abbreviate-totals-checkbox': 'abbreviateTotals', 'show-x-axis-labels-checkbox': 'showXAxisLabels',
-                    'show-y-axis-labels-checkbox': 'showYAxisLabels', 'show-x-axis-title-checkbox': 'showXAxisTitle',
-                    'show-y-axis-title-checkbox': 'showYAxisTitle', 'segment-colors': 'segmentColors',
-                    'show-legend-title-checkbox': 'showLegendTitle'
+                    'data-label-type': 'dataLabelType', 'show-data-labels': 'showDataLabels', 'show-gridlines': 'showGridlines', 
+                    'show-column-totals': 'showColumnTotals', 'abbreviate-totals-checkbox': 'abbreviateTotals', 
+                    'show-x-axis-labels-checkbox': 'showXAxisLabels', 'show-y-axis-labels-checkbox': 'showYAxisLabels', 
+                    'show-x-axis-title-checkbox': 'showXAxisTitle', 'show-y-axis-title-checkbox': 'showYAxisTitle', 
+                    'segment-colors': 'segmentColors', 'show-legend-title-checkbox': 'showLegendTitle',
+                    'show-column-total-sum-checkbox': 'showColumnTotalSum', 'show-legend-category-totals-checkbox': 'showLegendCategoryTotals'
                 };
                 
                 if (configMap[targetId]) {
