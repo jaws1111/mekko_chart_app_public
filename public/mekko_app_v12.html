@@ -1932,16 +1932,32 @@
                 e.target.value = '';
             });
             
-            document.getElementById('export-png-btn').addEventListener('click', () => {
-                const chartElement = document.getElementById('chart-container');
-                document.getElementById('toggle-sidebar-btn').style.display = 'none';
-                html2canvas(chartElement, { 
-                    backgroundColor: chartConfig.backgroundColor,
-                    onclone: (clonedDoc) => {
-                       const clonedChart = clonedDoc.getElementById('chart-container');
-                       clonedChart.style.backgroundColor = chartConfig.backgroundColor;
+            document.getElementById('save-chart-online-btn').addEventListener('click', saveChartOnline);
+            document.getElementById('load-chart-online-btn').addEventListener('click', loadChartsOnline);
+            document.getElementById('save-chart-confirm-btn').addEventListener('click', confirmSaveChartOnline);
+            document.getElementById('save-chart-cancel-btn').addEventListener('click', () => hideModal(saveChartModal));
+            document.getElementById('save-chart-modal-close-btn').addEventListener('click', () => hideModal(saveChartModal));
+            document.getElementById('load-chart-modal-close-btn').addEventListener('click', () => hideModal(loadChartModal));
+
+
+            document.getElementById('delete-all-data-btn').addEventListener('click', () => {
+                showConfirmationModal('Are you sure you want to delete all data? This cannot be undone.', () => {
+                    chartData = {
+                        columnLabels: ['Category 1'],
+                        rowLabels: ['Segment 1'],
+                        values: [[0]]
+                    };
+                    renderDataGrid('sidebar-grid-container');
+                    if (dataGridModal.classList.contains('visible')) {
+                        renderDataGrid('modal-grid-container');
                     }
-                }).then(canvas => {
+                    drawMekkoChart();
+                });
+            });
+
+            document.getElementById('export-png-btn').addEventListener('click', () => {
+                document.getElementById('toggle-sidebar-btn').style.display = 'none';
+                html2canvas(document.getElementById('chart-container')).then(canvas => {
                     const link = document.createElement('a');
                     link.download = 'mekko-chart.png';
                     link.href = canvas.toDataURL('image/png');
@@ -1949,40 +1965,14 @@
                     document.getElementById('toggle-sidebar-btn').style.display = 'flex';
                 });
             });
-
             document.getElementById('export-svg-btn').addEventListener('click', () => {
-                const svgNode = document.getElementById('mekko-chart').cloneNode(true);
-                
-                // Explicitly set the background color
-                d3.select(svgNode).style('background-color', chartConfig.backgroundColor);
-
-                const serializer = new XMLSerializer();
-                let svgString = serializer.serializeToString(svgNode);
-
-                // Create a style block with all necessary CSS rules
-                const styles = `
-                    .chart-title { font-family: ${chartConfig.fontFamily}; font-size: ${chartConfig.chartTitleFontSize}px; font-weight: 700; text-anchor: middle; fill: ${chartConfig.fontColor}; }
-                    .axis-title { font-family: ${chartConfig.fontFamily}; font-size: ${chartConfig.dataTitleFontSize}px; font-weight: 600; text-anchor: middle; fill: ${chartConfig.fontColor}; }
-                    .axis text { font-family: ${chartConfig.fontFamily}; font-size: ${chartConfig.fontSize}px; fill: ${chartConfig.fontColor}; }
-                    .legend-title { font-family: ${chartConfig.fontFamily}; font-size: ${chartConfig.rowTitleFontSize}px; font-weight: bold; fill: ${chartConfig.fontColor}; }
-                    .legend-item text { font-family: ${chartConfig.fontFamily}; font-size: ${chartConfig.legendFontSize}px; fill: ${chartConfig.fontColor}; }
-                    .segment-label { font-family: ${chartConfig.fontFamily}; font-size: ${chartConfig.fontSize * 0.9}px; text-anchor: middle; }
-                    .column-label { font-family: ${chartConfig.fontFamily}; font-size: ${chartConfig.fontSize}px; text-anchor: middle; fill: ${chartConfig.fontColor}; }
-                    .leader-line { stroke: ${chartConfig.fontColor}; stroke-width: 1px; stroke-dasharray: 2,2; }
-                    .grand-total { font-family: ${chartConfig.fontFamily}; font-size: ${chartConfig.fontSize}px; font-weight: bold; text-anchor: end; fill: ${chartConfig.fontColor}; }
-                `;
-
-                // Inject styles into the SVG
-                const defs = '<defs><style type="text/css"><![CDATA[' + styles + ']]></style></defs>';
-                svgString = svgString.replace('>', '>' + defs);
-
-                const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                const svgData = new XMLSerializer().serializeToString(document.getElementById('mekko-chart'));
+                const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
                 const url = URL.createObjectURL(svgBlob);
                 const a = document.createElement('a');
                 a.href = url; a.download = 'mekko-chart.svg'; a.click();
                 URL.revokeObjectURL(url);
             });
-
 
             document.getElementById('transpose-btn').addEventListener('click', () => {
                 const transposedValues = chartData.values[0].map((_, colIndex) => chartData.values.map(row => row[colIndex]));
