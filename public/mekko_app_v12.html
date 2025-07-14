@@ -1724,7 +1724,7 @@
             const dataToSave = {
                 name: chartName,
                 chartData: JSON.stringify(chartData), 
-                chartConfig: chartConfig,
+                chartConfig: JSON.stringify(chartConfig), // Stringify config
                 dataTitles: {
                     row: document.getElementById('row-title-input').value,
                     column: document.getElementById('column-title-input').value,
@@ -1813,17 +1813,27 @@
                 const docSnap = await window.firebase.getDoc(chartDocRef);
 
                 if (docSnap.exists()) {
-                    const chartDataLoaded = docSnap.data();
-                    chartData = JSON.parse(chartDataLoaded.chartData); 
-                    chartConfig = chartDataLoaded.chartConfig;
-                    document.getElementById('row-title-input').value = chartDataLoaded.dataTitles.row;
-                    document.getElementById('column-title-input').value = chartDataLoaded.dataTitles.column;
-                    document.getElementById('data-title-input').value = chartDataLoaded.dataTitles.data;
+                    const loaded = docSnap.data();
+                    chartData = JSON.parse(loaded.chartData); 
+                    
+                    // Handle both old (object) and new (string) config formats
+                    let loadedConfig;
+                    if (typeof loaded.chartConfig === 'string') {
+                        loadedConfig = JSON.parse(loaded.chartConfig);
+                    } else {
+                        loadedConfig = loaded.chartConfig; // For backward compatibility
+                    }
+                    
+                    chartConfig = { ...defaultChartConfig, ...loadedConfig };
+
+                    document.getElementById('row-title-input').value = loaded.dataTitles.row;
+                    document.getElementById('column-title-input').value = loaded.dataTitles.column;
+                    document.getElementById('data-title-input').value = loaded.dataTitles.data;
 
                     renderDataGrid('sidebar-grid-container');
                     initializeConfigInputs();
                     drawMekkoChart();
-                    showConfirmationModal(`Chart "${chartDataLoaded.name}" loaded successfully!`, () => {}, true);
+                    showConfirmationModal(`Chart "${loaded.name}" loaded successfully!`, () => {}, true);
                 } else {
                     showConfirmationModal("Chart not found.", () => {}, true);
                 }
@@ -1868,7 +1878,7 @@
 
             try {
                 const prefsDocRef = window.firebase.doc(window.firebase.db, `artifacts/${window.firebase.appId}/users/${window.firebase.currentUserId()}/preferences`, 'userPrefs');
-                await window.firebase.setDoc(prefsDocRef, prefs, { merge: true });
+                await window.firebase.setDoc(prefsDocRef, { chartConfig: JSON.stringify(prefs.chartConfig), sidebarFontSize: prefs.sidebarFontSize, lastUpdated: prefs.lastUpdated }, { merge: true });
                 console.log("User preferences saved.");
             } catch (e) {
                 console.error("Error saving user preferences:", e);
@@ -1884,7 +1894,14 @@
 
                 if (docSnap.exists()) {
                     const prefs = docSnap.data();
-                    chartConfig = { ...defaultChartConfig, ...prefs.chartConfig };
+                    let loadedConfig;
+                    if(typeof prefs.chartConfig === 'string') {
+                        loadedConfig = JSON.parse(prefs.chartConfig);
+                    } else {
+                        loadedConfig = prefs.chartConfig;
+                    }
+                    chartConfig = { ...defaultChartConfig, ...loadedConfig };
+
                     if (prefs.sidebarFontSize) {
                         document.documentElement.style.setProperty('--sidebar-base-font-size', prefs.sidebarFontSize);
                     }
